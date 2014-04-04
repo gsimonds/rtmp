@@ -15,11 +15,14 @@
             throw new NotImplementedException();
         }
 
-        public RtmpPacket Parse(PacketBuffer dataPacket)
+        public RtmpPacket Decode(PacketBuffer dataPacket)
         {
             throw new NotImplementedException();
         }
 
-        // other public properties/methods TBD
+        public PacketBuffer Encode(RtmpPacket dataPacket)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

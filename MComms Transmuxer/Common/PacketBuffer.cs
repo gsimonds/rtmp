@@ -15,6 +15,7 @@
         private int refCount = 0;
         private int bufferSize = 0;
         private int actualBufferSize = 0;
+        private int position = 0;
         private byte[] buffer = null;
 
         public PacketBuffer(PacketBufferAllocator allocator, int bufferSize)
@@ -52,6 +53,18 @@
             }
         }
 
+        public int Position
+        {
+            get
+            {
+                return this.position;
+            }
+            set
+            {
+                this.position = value;
+            }
+        }
+
         public int AddRef()
         {
             lock (this)
@@ -76,6 +89,7 @@
         public void CleanUp()
         {
             this.actualBufferSize = 0;
+            this.position = 0;
         }
     }
 }
