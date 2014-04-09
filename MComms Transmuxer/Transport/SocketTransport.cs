@@ -242,7 +242,7 @@
 
         public void Start(IPEndPoint serverEndPoint = null, ProtocolType protocolType = ProtocolType.Unspecified)
         {
-            if (!this.isRunning)
+            if (this.isRunning)
             {
                 throw new InvalidOperationException("Transport is running already");
             }
@@ -495,6 +495,7 @@
             // create new client context
             ClientContext client = new ClientContext();
             client.Socket = asyncContext.AcceptSocket;
+            client.RemoteEndPoint = client.Socket.RemoteEndPoint as IPEndPoint;
 
             // push accept context back to pool
             asyncContext.AcceptSocket = null;
@@ -522,14 +523,13 @@
             }
 
             // store client
-            IPEndPoint remoteEndPoint = client.Socket.RemoteEndPoint as IPEndPoint;
             lock (this.clients)
             {
-                this.clients.Add(remoteEndPoint, client);
+                this.clients.Add(client.RemoteEndPoint, client);
             }
 
             // notify about new connection
-            this.OnConnect(remoteEndPoint);
+            this.OnConnect(client.RemoteEndPoint);
 
             // start receive loop
             recvAsyncContext.AcceptSocket = client.Socket;
@@ -571,6 +571,7 @@
             else
             {
                 Array.Copy(asyncContext.Buffer, packet.Buffer, asyncContext.BytesTransferred);
+                packet.ActualBufferSize = asyncContext.BytesTransferred;
             }
 
             // back to receiving loop
@@ -579,6 +580,9 @@
 
             // report new packet
             this.OnReceive((IPEndPoint)client.Socket.RemoteEndPoint, packet);
+
+            // release packet
+            packet.Release();
         }
 
         private void StartSend(SocketAsyncEventArgs asyncContext)
@@ -651,10 +655,9 @@
             asyncContext.AcceptSocket = null;
 
             // remove client
-            IPEndPoint remoteEndPoint = client.Socket.RemoteEndPoint as IPEndPoint;
             lock (this.clients)
             {
-                this.clients.Remove(remoteEndPoint);
+                this.clients.Remove(client.RemoteEndPoint);
             }
 
             if (receiveContext)
@@ -679,7 +682,7 @@
             this.maxConnectionsEnforcer.Release();
 
             // notify about disconnection
-            this.OnDisconnect(remoteEndPoint);
+            this.OnDisconnect(client.RemoteEndPoint);
         }
 
         #endregion

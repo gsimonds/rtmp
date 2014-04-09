@@ -11,5 +11,6 @@
     class ClientContext
     {
         public Socket Socket { get; set; }
+        public IPEndPoint RemoteEndPoint { get; set; }
     }
 }

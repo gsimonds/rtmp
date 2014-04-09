@@ -6,13 +6,13 @@
     using System.Text;
     using System.Threading.Tasks;
 
-    class PacketBufferAllocator
+    public class PacketBufferAllocator
     {
         private int bufferSize = 0;
         private int bufferCount = 0;
         private volatile int freeBufferCount = 0;
-        private List<PacketBuffer> freeBuffers;
-        private List<PacketBuffer> lockedBuffers;
+        private List<PacketBuffer> freeBuffers = new List<PacketBuffer>();
+        private List<PacketBuffer> lockedBuffers = new List<PacketBuffer>();
 
         public PacketBufferAllocator(int bufferSize, int bufferCount)
         {

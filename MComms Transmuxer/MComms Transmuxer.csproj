@@ -32,6 +32,9 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
+  <PropertyGroup>
+    <StartupObject>MComms_Transmuxer.Program</StartupObject>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -50,10 +53,15 @@
     <Compile Include="Common\PacketBuffer.cs" />
     <Compile Include="Common\MediaPacket.cs" />
     <Compile Include="Common\MediaType.cs" />
-    <Compile Include="RTMP\RtmpPacket.cs" />
-    <Compile Include="RTMP\RtmpProtocolParser.cs" />
+    <Compile Include="Common\PacketBufferStream.cs" />
+    <Compile Include="RTMP\Parser\RtmpChunkStream.cs" />
+    <Compile Include="RTMP\Parser\RtmpHandshake.cs" />
+    <Compile Include="RTMP\Parser\RtmpMessage.cs" />
+    <Compile Include="RTMP\Parser\RtmpMessageType.cs" />
+    <Compile Include="RTMP\Parser\RtmpProtocolParser.cs" />
     <Compile Include="RTMP\RtmpServer.cs" />
     <Compile Include="RTMP\RtmpSession.cs" />
+    <Compile Include="RTMP\RtmpSessionState.cs" />
     <Compile Include="SmoothStreaming\SmoothStreamingController.cs" />
     <Compile Include="SmoothStreaming\SmoothStreamingPublisher.cs" />
     <Compile Include="SmoothStreaming\SmoothStreamingSegmenter.cs" />

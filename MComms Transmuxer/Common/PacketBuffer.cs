@@ -9,20 +9,37 @@
     /// <summary>
     /// General purpose data packet
     /// </summary>
-    class PacketBuffer
+    public class PacketBuffer
     {
+        private static object idCounterLock = new object();
+        private static long idCounter = 0;
+
         private PacketBufferAllocator allocator = null;
         private int refCount = 0;
         private int bufferSize = 0;
         private int actualBufferSize = 0;
         private int position = 0;
         private byte[] buffer = null;
+        private long id = 0;
 
         public PacketBuffer(PacketBufferAllocator allocator, int bufferSize)
         {
+            lock (PacketBuffer.idCounterLock)
+            {
+                this.id = PacketBuffer.idCounter++;
+            }
+
             this.allocator = allocator;
             this.bufferSize = bufferSize;
             this.buffer = new byte[bufferSize];
+        }
+
+        public long Id
+        {
+            get
+            {
+                return this.id;
+            }
         }
 
         public byte[] Buffer

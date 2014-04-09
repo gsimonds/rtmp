@@ -8,15 +8,17 @@
 
     using MComms_Transmuxer.Common;
 
-    class RtmpPacket
+    class RtmpMessage
     {
-        private PacketBuffer dataPacket = null;
-
-        public RtmpPacket(PacketBuffer dataPacket)
+        public RtmpMessage()
         {
-            this.dataPacket = dataPacket;
-            throw new NotImplementedException();
         }
+
+        public RtmpMessageType MessageType { get; set; }
+
+        public int MessageStreamId { get; set; }
+
+        public int Timestamp { get; set; }
 
         // other public properties/methods TBD
     }
