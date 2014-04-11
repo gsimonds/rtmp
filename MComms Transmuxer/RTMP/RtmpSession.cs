@@ -20,6 +20,7 @@
         private RtmpProtocolParser parser = new RtmpProtocolParser();
         private Thread sessionThread = null;
         private Queue<PacketBuffer> receivedPackets = new Queue<PacketBuffer>();
+        private RtmpHandshake handshakeS1 = null;
 
         public RtmpSession(SocketTransport transport, IPEndPoint sessionEndPoint)
         {
@@ -61,16 +62,32 @@
                 if (packet != null)
                 {
                     RtmpMessage msg = null;
-                    while ((msg = parser.Decode(packet)) != null)
+                    try
                     {
-                        this.ProcessMessage(msg);
-                        packet = null;
+                        while ((msg = parser.Decode(packet)) != null)
+                        {
+                            this.ProcessMessage(msg);
+                            packet = null;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // something went wrong, drop the session
+                        this.transport.Disconnect(this.sessionEndPoint);
+                        break;
                     }
                 }
                 else
                 {
                     // sleep only if don't have anything to do
                     Thread.Sleep(1);
+                }
+
+                // send packets if any
+                while ((packet = this.parser.GetSendPacket()) != null)
+                {
+                    this.transport.Send(this.sessionEndPoint, packet);
+                    packet.Release();
                 }
             }
         }
@@ -79,34 +96,86 @@
         {
             switch (msg.MessageType)
             {
-                case RtmpMessageType.HandshakeC0:
+                case RtmpIntMessageType.HandshakeC0:
                     {
-                        RtmpHandshake hadshake = (RtmpHandshake)msg;
-                        if (hadshake.Version == 3)
+                        if (this.state != RtmpSessionState.Uninitialized)
                         {
-                            // TODO: send reply
+                            // wrong handshake sequence
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        RtmpHandshake handshake = (RtmpHandshake)msg;
+                        if (handshake.Version == Global.RtmpVersion)
+                        {
                             this.state = RtmpSessionState.HanshakeVersionSent;
                             this.parser.State = RtmpSessionState.HanshakeVersionSent;
+                            // push S0 & S1 to parser
+                            this.parser.Encode(RtmpHandshake.GenerateS0());
+                            this.handshakeS1 = RtmpHandshake.GenerateS1();
+                            this.parser.Encode(this.handshakeS1);
                         }
                         else
                         {
-                            // TODO: handle it
+                            // unsupported protocol version
+                            this.transport.Disconnect(this.sessionEndPoint);
                         }
 
                         break;
                     }
 
-                case RtmpMessageType.HandshakeC1:
+                case RtmpIntMessageType.HandshakeC1:
                     {
+                        if (this.state != RtmpSessionState.HanshakeVersionSent)
+                        {
+                            // wrong handshake sequence
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        RtmpHandshake handshakeC1 = (RtmpHandshake)msg;
+                        RtmpHandshake handshakeS2 = handshakeC1.GenerateS2();
+                        this.state = RtmpSessionState.HanshakeAckSent;
+                        this.parser.State = RtmpSessionState.HanshakeAckSent;
+                        this.parser.Encode(handshakeS2);
                         break;
                     }
 
-                case RtmpMessageType.HandshakeC2:
+                case RtmpIntMessageType.HandshakeC2:
                     {
+                        if (this.state != RtmpSessionState.HanshakeAckSent)
+                        {
+                            // wrong handshake sequence
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        RtmpHandshake handshakeC2 = (RtmpHandshake)msg;
+                        if (handshakeC2.ValidateC2(this.handshakeS1))
+                        {
+                            this.state = RtmpSessionState.Receiving;
+                            this.parser.State = RtmpSessionState.Receiving;
+                        }
+                        else
+                        {
+                            // handshake validation failed
+                            this.transport.Disconnect(this.sessionEndPoint);
+                        }
+
                         break;
                     }
 
-                // TODO: process other messages
+                default:
+                    {
+                        if (this.state != RtmpSessionState.Receiving)
+                        {
+                            // wrong state
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        throw new NotImplementedException();
+                    }
             }
         }
 

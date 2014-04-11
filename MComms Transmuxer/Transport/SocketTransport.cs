@@ -2,6 +2,7 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
     using System.Net;
     using System.Net.Sockets;
@@ -81,17 +82,14 @@
 
         private Semaphore maxConnectionsEnforcer = null;
 
-        private PacketBufferAllocator allocator = null;
-
         #endregion
 
         #region Constructor
 
-        public SocketTransport(PacketBufferAllocator allocator)
+        public SocketTransport()
         {
             // we don't do any initialization here to allow user to customize settings
             // the real initialization will be done in Start() method
-            this.allocator = allocator;
         }
 
         #endregion
@@ -302,9 +300,46 @@
             this.StartSend(sendAsyncContext);
         }
 
-        public int Connect(IPEndPoint endPoint, ProtocolType protocolType)
+        public void Connect(IPEndPoint endPoint, ProtocolType protocolType)
         {
             throw new NotImplementedException();
+        }
+
+        public void Disconnect(IPEndPoint endPoint)
+        {
+            if (!this.isRunning)
+            {
+                throw new InvalidOperationException("Invalid while transport is not running");
+            }
+
+            ClientSendContext client = null;
+
+            lock (clients)
+            {
+                if (!clients.ContainsKey(endPoint))
+                {
+                    // already disconnected
+                    return;
+                }
+
+                client = new ClientSendContext(clients[endPoint]);
+            }
+
+            try
+            {
+                client.Socket.Shutdown(SocketShutdown.Both);
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                client.Socket.Close();
+            }
+            catch
+            {
+            }
         }
 
         #endregion
@@ -563,7 +598,7 @@
 
             ClientContext client = (ClientContext)asyncContext.UserToken;
 
-            PacketBuffer packet = this.allocator.LockBuffer();
+            PacketBuffer packet = Global.Allocator.LockBuffer();
             if (packet == null)
             {
                 // TODO: process it
@@ -587,7 +622,10 @@
 
         private void StartSend(SocketAsyncEventArgs asyncContext)
         {
-            if (!this.sendBufferManager.SetBuffer(asyncContext))
+            ClientSendContext client = (ClientSendContext)asyncContext.UserToken;
+            int bytesToSend = Math.Min(this.sendBufferSize, client.Packet.ActualBufferSize - client.Packet.Position);
+
+            if (!this.sendBufferManager.SetBuffer(asyncContext, bytesToSend))
             {
                 // no more buffer space
                 // we should not be here actually
@@ -595,9 +633,7 @@
                 return;
             }
 
-            ClientSendContext client = (ClientSendContext)asyncContext.UserToken;
-            int bytesToSend = Math.Min(this.sendBufferSize, client.Packet.ActualBufferSize - client.Packet.Position);
-            Array.Copy(client.Packet.Buffer, client.Packet.Position, asyncContext.Buffer, 0, bytesToSend);
+            Array.Copy(client.Packet.Buffer, client.Packet.Position, asyncContext.Buffer, asyncContext.Offset, bytesToSend);
 
             if (!asyncContext.AcceptSocket.SendAsync(asyncContext))
             {

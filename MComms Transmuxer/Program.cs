@@ -8,6 +8,7 @@
     using System.Threading;
     using System.Threading.Tasks;
 
+    using MComms_Transmuxer.Common;
     using MComms_Transmuxer.RTMP;
 
     static class Program
@@ -25,12 +26,16 @@
                     {
                         case "-standalone":
                             {
+                                // TODO: adjust
+                                Global.Allocator = new PacketBufferAllocator(10240, 1024);
                                 RtmpServer server = new RtmpServer();
                                 server.Start();
+
                                 while (true)
                                 {
                                     Thread.Sleep(1);
                                 }
+
                                 server.Stop();
                                 break;
                             }

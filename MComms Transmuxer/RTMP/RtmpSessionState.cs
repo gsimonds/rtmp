@@ -11,7 +11,6 @@
         Uninitialized = 0,
         HanshakeVersionSent,
         HanshakeAckSent,
-        HanshakeDone,
         Receiving,
         Stopped,
     }

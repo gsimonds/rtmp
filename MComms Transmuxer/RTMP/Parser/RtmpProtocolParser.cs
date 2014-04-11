@@ -12,17 +12,26 @@
     {
         private PacketBufferStream dataStream = new PacketBufferStream();
         private RtmpHandshake handshake = new RtmpHandshake();
-        private Dictionary<int, RtmpChunkStream> chunkStreams = new Dictionary<int, RtmpChunkStream>();
+        private Dictionary<uint, RtmpChunkStream> chunkStreams = new Dictionary<uint, RtmpChunkStream>();
+
+        /// <summary>
+        /// Output packet queue. We're using List instead of Queue to allow insertion
+        /// of high priority packets to the beginning of the queue
+        /// </summary>
+        private List<PacketBuffer> outputQueue = new List<PacketBuffer>();
 
         public RtmpProtocolParser()
         {
             this.State = RtmpSessionState.Uninitialized;
+
+            // allocate data for chunk control stream
+            this.chunkStreams.Add(2, new RtmpChunkStream(2));
         }
 
         /// <summary>
         /// We need session state in the parser to know what kind
         /// of data to expect. Makes sense for handshaking stage only.
-        /// As soon as handshaking is finished, all data is coming
+        /// As soon as handshaking is done, all data is coming
         /// in the same chunked format
         /// </summary>
         public RtmpSessionState State { get; set; }
@@ -40,6 +49,11 @@
                 }
                 this.dataStream.Insert(dataPacket, 0, dataPacket.ActualBufferSize);
                 this.dataStream.Seek(0, System.IO.SeekOrigin.Begin);
+            }
+
+            if (this.dataStream.Length == 0)
+            {
+                return null;
             }
 
             switch (this.State)
@@ -65,7 +79,18 @@
                 default:
                     {
                         // any other state means that handshake has been finished
-                        // TODO: implement
+                        RtmpChunkHeader hdr = RtmpChunkHeader.Decode(this.dataStream);
+
+                        if (hdr != null)
+                        {
+                            if (!this.chunkStreams.ContainsKey(hdr.ChunkStreamId))
+                            {
+                                this.chunkStreams.Add(hdr.ChunkStreamId, new RtmpChunkStream(hdr.ChunkStreamId));
+                            }
+
+                            msg = this.chunkStreams[hdr.ChunkStreamId].Decode(hdr, this.dataStream);
+                        }
+
                         break;
                     }
             }
@@ -73,9 +98,23 @@
             return msg;
         }
 
-        public PacketBuffer Encode(RtmpMessage dataPacket)
+        public void Encode(RtmpMessage msg)
         {
-            throw new NotImplementedException();
+            this.outputQueue.Add(msg.ToPacketBuffer());
+        }
+
+        public PacketBuffer GetSendPacket()
+        {
+            if (this.outputQueue.Count > 0)
+            {
+                PacketBuffer packet = this.outputQueue[0];
+                this.outputQueue.RemoveAt(0);
+                return packet;
+            }
+            else
+            {
+                return null;
+            }
         }
     }
 }

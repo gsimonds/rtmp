@@ -13,7 +13,6 @@
 
     class RtmpServer
     {
-        private PacketBufferAllocator allocator = null;
         private SocketTransport transport = null;
         private volatile bool isRunning = false;
         private Thread controlThread = null;
@@ -21,10 +20,11 @@
 
         public RtmpServer()
         {
-            // TODO: adjust
-            this.allocator = new PacketBufferAllocator(10240, 1024);
+            // initialize default endianness
+            EndianBinaryReader.GlobalEndiannes = Endianness.BigEndian;
+            EndianBinaryWriter.GlobalEndiannes = Endianness.BigEndian;
 
-            this.transport = new SocketTransport(this.allocator);
+            this.transport = new SocketTransport();
             this.transport.Connected += Transport_Connected;
             this.transport.Disconnected += Transport_Disconnected;
             this.transport.Received += Transport_Received;

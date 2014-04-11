@@ -6,7 +6,24 @@
     using System.Text;
     using System.Threading.Tasks;
 
-    enum RtmpMessageType
+    enum RtmpMessageType : byte
+    {
+        SetChunkSize = 0x01,
+        Abort = 0x02,
+        Aknowledgement = 0x03,
+        UserControl = 0x04,
+        WindowAknowledgementSize = 0x05,
+        SetPeerBandwidth = 0x06,
+        Audio = 0x08,
+        Video = 0x09,
+        Data = 0x12, // AMF0
+        SharedObject = 0x13, // AMF0
+        Command = 0x14, // AMF0
+        Aggregate = 0x16,
+        Undefined = 0xFF, // for internal use only
+    }
+
+    enum RtmpIntMessageType
     {
         HandshakeC0,
         HandshakeS0,

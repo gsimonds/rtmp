@@ -42,16 +42,20 @@
         // specified SocketAsyncEventArgs object.
         //
         // returns true if the buffer was successfully set, else false
-        internal bool SetBuffer(SocketAsyncEventArgs args)
+        internal bool SetBuffer(SocketAsyncEventArgs args, int count = 0)
         {
             lock (this)
             {
+                if (count == 0 || count > this.bufferBytesAllocatedForEachSaea)
+                {
+                    count = this.bufferBytesAllocatedForEachSaea;
+                }
                 if (this.freeIndexPool.Count > 0)
                 {
                     //This if-statement is only true if you have called the FreeBuffer
                     //method previously, which would put an offset for a buffer space 
                     //back into this stack.
-                    args.SetBuffer(this.bufferBlock, this.freeIndexPool.Pop(), this.bufferBytesAllocatedForEachSaea);
+                    args.SetBuffer(this.bufferBlock, this.freeIndexPool.Pop(), count);
                 }
                 else
                 {
@@ -62,7 +66,7 @@
                     {
                         return false;
                     }
-                    args.SetBuffer(this.bufferBlock, this.currentIndex, this.bufferBytesAllocatedForEachSaea);
+                    args.SetBuffer(this.bufferBlock, this.currentIndex, count);
                     this.currentIndex += this.bufferBytesAllocatedForEachSaea;
                 }
                 return true;

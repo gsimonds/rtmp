@@ -46,7 +46,13 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Common\BigEndianBitConverter.cs" />
+    <Compile Include="Common\EndianBinaryReader.cs" />
+    <Compile Include="Common\EndianBinaryWriter.cs" />
+    <Compile Include="Common\EndianBitConverter.cs" />
+    <Compile Include="Common\Endianness.cs" />
     <Compile Include="Common\Fraction.cs" />
+    <Compile Include="Common\LittleEndianBitConverter.cs" />
     <Compile Include="Common\MediaCodec.cs" />
     <Compile Include="Common\MediaContentType.cs" />
     <Compile Include="Common\PacketBufferAllocator.cs" />
@@ -54,6 +60,8 @@
     <Compile Include="Common\MediaPacket.cs" />
     <Compile Include="Common\MediaType.cs" />
     <Compile Include="Common\PacketBufferStream.cs" />
+    <Compile Include="Global.cs" />
+    <Compile Include="RTMP\Parser\RtmpChunkHeader.cs" />
     <Compile Include="RTMP\Parser\RtmpChunkStream.cs" />
     <Compile Include="RTMP\Parser\RtmpHandshake.cs" />
     <Compile Include="RTMP\Parser\RtmpMessage.cs" />

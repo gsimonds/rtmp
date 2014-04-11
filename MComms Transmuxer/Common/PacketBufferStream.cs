@@ -21,6 +21,16 @@
         {
         }
 
+        public PacketBufferStream(PacketBuffer packet)
+        {
+            this.Insert(packet, 0, packet.ActualBufferSize);
+        }
+
+        public PacketBufferStream(PacketBuffer packet, int offset, int count)
+        {
+            this.Insert(packet, offset, count);
+        }
+
         #region Stream implementation
 
         protected override void Dispose(bool disposing)
@@ -65,12 +75,19 @@
             }
             set
             {
-                if (value < 0 || value >= this.totalLength)
+                if (value < 0 || value > this.totalLength)
                 {
                     throw new ArgumentOutOfRangeException();
                 }
                 this.position = value;
-                this.positionKey = this.position2BufferId.Keys.Last<long>(key => key <= this.position);
+                if (this.position2BufferId.Count > 0)
+                {
+                    this.positionKey = this.position2BufferId.Keys.Last<long>(key => key <= this.position);
+                }
+                else
+                {
+                    this.positionKey = 0;
+                }
             }
         }
 
@@ -111,14 +128,25 @@
             {
                 // update position key
                 this.positionKey = key;
+                long intPacketOffset = 0;
+                if (this.position > this.positionKey)
+                {
+                    intPacketOffset = this.position - this.positionKey;
+                }
 
                 long bufferId = this.position2BufferId[key];
                 PacketBuffer packet = this.bufferId2Buffer[bufferId];
                 long packetSize = this.bufferId2Size[bufferId];
                 long packetOffset = this.bufferId2Offset[bufferId];
 
-                int copySize = (int)Math.Min(count, packetSize);
-                Array.Copy(packet.Buffer, packetOffset, buffer, offset, copySize);
+                if (intPacketOffset >= packetSize)
+                {
+                    // nothing to read in current packet
+                    continue;
+                }
+
+                int copySize = (int)Math.Min(count, packetSize - intPacketOffset);
+                Array.Copy(packet.Buffer, packetOffset + intPacketOffset, buffer, offset, copySize);
 
                 actuallyRead += copySize;
                 if (actuallyRead == count)
@@ -133,7 +161,41 @@
 
         public override void Write(byte[] buffer, int offset, int count)
         {
-            throw new NotImplementedException();
+            int actuallyWritten = 0;
+
+            IEnumerable<long> foundKeys = this.position2BufferId.Keys.Where<long>(key => key >= this.positionKey);
+            foreach (long key in foundKeys)
+            {
+                // update position key
+                this.positionKey = key;
+                long intPacketOffset = 0;
+                if (this.position > this.positionKey)
+                {
+                    intPacketOffset = this.position - this.positionKey;
+                }
+
+                long bufferId = this.position2BufferId[key];
+                PacketBuffer packet = this.bufferId2Buffer[bufferId];
+                long packetSize = this.bufferId2Size[bufferId];
+                long packetOffset = this.bufferId2Offset[bufferId];
+
+                if (intPacketOffset >= packetSize)
+                {
+                    // nothing to write in current packet
+                    continue;
+                }
+
+                int copySize = (int)Math.Min(count, packetSize - intPacketOffset);
+                Array.Copy(buffer, actuallyWritten, packet.Buffer, packetOffset + intPacketOffset, copySize);
+
+                actuallyWritten += copySize;
+                if (actuallyWritten == count)
+                {
+                    break;
+                }
+            }
+
+            this.position += actuallyWritten;
         }
 
         #endregion
@@ -221,15 +283,7 @@
 
             this.totalLength -= removedLength;
             this.Position = 0;
-        }
-
-        // TODO: implement big/little endian reader/writer for int and other types if necessary
-        // TODO: implement int reader from 3 bytes
-        public int ReadInt32()
-        {
-            byte[] data = new byte[4];
-            this.Read(data, 0, 4);
-            return BitConverter.ToInt32(data, 0);
+            this.positionKey = 0;
         }
 
         #endregion
