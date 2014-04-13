@@ -150,7 +150,7 @@ namespace MComms_Transmuxer.Common
 		/// <returns>A single precision floating point number formed by four bytes beginning at startIndex.</returns>
 		public float ToSingle (byte[] value, int startIndex)
 		{
-			return Int32BitsToSingle(ToInt32(value, startIndex));
+			return Int32BitsToSingle(ToInt32(value, startIndex, 4));
 		}
 
 		/// <summary>
@@ -170,9 +170,9 @@ namespace MComms_Transmuxer.Common
 		/// <param name="value">An array of bytes.</param>
 		/// <param name="startIndex">The starting position within value.</param>
 		/// <returns>A 32-bit signed integer formed by four bytes beginning at startIndex.</returns>
-		public int ToInt32 (byte[] value, int startIndex)
+		public int ToInt32 (byte[] value, int startIndex, int byteCount)
 		{
-			return unchecked((int) (CheckedFromBytes(value, startIndex, 4)));
+            return unchecked((int)(CheckedFromBytes(value, startIndex, byteCount)));
 		}
 
 		/// <summary>
@@ -334,7 +334,7 @@ namespace MComms_Transmuxer.Common
 			int[] parts = new int[4];
 			for (int i=0; i < 4; i++)
 			{
-				parts[i] = ToInt32(value, startIndex+i*4);
+                parts[i] = ToInt32(value, startIndex + i * 4, 4);
 			}
 			return new Decimal(parts);
 		}
@@ -589,7 +589,12 @@ namespace MComms_Transmuxer.Common
 			CopyBytes(value, 4, buffer, index);
 		}
 
-		/// <summary>
+        public void CopyBytes(int value, byte[] buffer, int index, int byteCount)
+        {
+            CopyBytes(value, byteCount, buffer, index);
+        }
+
+        /// <summary>
 		/// Copies the specified 64-bit signed integer value into the specified byte array,
 		/// beginning at the specified index.
 		/// </summary>

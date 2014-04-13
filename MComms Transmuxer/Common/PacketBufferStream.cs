@@ -2,6 +2,7 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.IO;
     using System.Linq;
     using System.Text;
@@ -82,7 +83,19 @@
                 this.position = value;
                 if (this.position2BufferId.Count > 0)
                 {
-                    this.positionKey = this.position2BufferId.Keys.Last<long>(key => key <= this.position);
+                    try
+                    {
+                        this.positionKey = this.position2BufferId.Keys.Where<long>(key => key <= this.position).Max<long>(key => key);
+                        //this.positionKey = this.position2BufferId.Keys.Last<long>(key => key <= this.position);
+                        if (this.positionKey > this.position)
+                        {
+                            int n = 1;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        int n = 1;
+                    }
                 }
                 else
                 {
@@ -123,7 +136,8 @@
         {
             int actuallyRead = 0;
 
-            IEnumerable<long> foundKeys = this.position2BufferId.Keys.Where<long>(key => key >= this.positionKey);
+            //IEnumerable<long> foundKeys = this.position2BufferId.Keys.Where<long>(key => key >= this.positionKey).OrderBy<long, long>(key => key);
+            List<long> foundKeys = new List<long>(this.position2BufferId.Keys.Where<long>(key => key >= this.positionKey).OrderBy<long, long>(key => key));
             foreach (long key in foundKeys)
             {
                 // update position key
@@ -145,8 +159,8 @@
                     continue;
                 }
 
-                int copySize = (int)Math.Min(count, packetSize - intPacketOffset);
-                Array.Copy(packet.Buffer, packetOffset + intPacketOffset, buffer, offset, copySize);
+                int copySize = (int)Math.Min(count - actuallyRead, packetSize - intPacketOffset);
+                Array.Copy(packet.Buffer, packetOffset + intPacketOffset, buffer, offset + actuallyRead, copySize);
 
                 actuallyRead += copySize;
                 if (actuallyRead == count)
@@ -156,6 +170,10 @@
             }
 
             this.position += actuallyRead;
+            if (this.positionKey > this.position)
+            {
+                int n = 1;
+            }
             return actuallyRead;
         }
 
@@ -163,7 +181,7 @@
         {
             int actuallyWritten = 0;
 
-            IEnumerable<long> foundKeys = this.position2BufferId.Keys.Where<long>(key => key >= this.positionKey);
+            IEnumerable<long> foundKeys = this.position2BufferId.Keys.Where<long>(key => key >= this.positionKey).OrderBy<long, long>(key => key);
             foreach (long key in foundKeys)
             {
                 // update position key
@@ -185,7 +203,7 @@
                     continue;
                 }
 
-                int copySize = (int)Math.Min(count, packetSize - intPacketOffset);
+                int copySize = (int)Math.Min(count - actuallyWritten, packetSize - intPacketOffset);
                 Array.Copy(buffer, actuallyWritten, packet.Buffer, packetOffset + intPacketOffset, copySize);
 
                 actuallyWritten += copySize;
@@ -206,6 +224,11 @@
         {
             if (this.position == this.totalLength)
             {
+                Debug.WriteLine("Insert: added buffer {0}, size {1}, offset {2}", buffer.Id, count, offset);
+                if (this.totalLength < 0)
+                {
+                    int n = 1;
+                }
                 this.position2BufferId.Add(this.totalLength, buffer.Id);
                 this.bufferId2Offset.Add(buffer.Id, offset);
                 this.bufferId2Size.Add(buffer.Id, count);
@@ -222,7 +245,15 @@
 
         public void CopyTo(PacketBufferStream buffer, int count)
         {
-            throw new NotImplementedException();
+            // TODO: implement properly
+            PacketBuffer packet = Global.Allocator.LockBuffer();
+            packet.ActualBufferSize = count;
+            Read(packet.Buffer, 0, count);
+            if (buffer.Length > 0)
+            {
+                buffer.Seek(0, System.IO.SeekOrigin.End);
+            }
+            buffer.Insert(packet, 0, count);
         }
 
         /// <summary>
@@ -230,7 +261,9 @@
         /// </summary>
         public void TrimBegin()
         {
-            IEnumerable<long> foundKeys = this.position2BufferId.Keys.Where<long>(key => key < this.positionKey);
+            //Debug.WriteLine("TrimBegin: pos {0}, key {1}", this.Position, this.positionKey);
+
+            List<long> foundKeys = new List<long>(this.position2BufferId.Keys.Where<long>(key => key < this.positionKey));
             long removedLength = 0;
 
             foreach (long key in foundKeys)
@@ -239,6 +272,11 @@
 
                 // accumulate removed length
                 removedLength += this.bufferId2Size[bufferId];
+
+                if (removedLength > this.position)
+                {
+                    int n = 1;
+                }
 
                 // release the buffer
                 this.bufferId2Buffer[bufferId].Release();
@@ -255,35 +293,62 @@
             {
                 long gap = this.position - removedLength;
                 long bufferId = this.position2BufferId[this.positionKey];
+                Debug.WriteLine("TrimBegin: trim pos {4}, buffer {0}, size {1}, offset {2}, gap {3}", bufferId, this.bufferId2Size[bufferId], this.bufferId2Offset[bufferId], gap, this.position);
                 this.bufferId2Size[bufferId] -= gap;
                 this.bufferId2Offset[bufferId] += gap;
+
+                this.position2BufferId.Remove(this.positionKey);
+
+                if (this.bufferId2Size[bufferId] < 0)
+                {
+                    int n = 1;
+                }
 
                 if (this.bufferId2Size[bufferId] == 0)
                 {
                     // free completely used buffer
                     this.bufferId2Buffer[bufferId].Release();
-                    this.position2BufferId.Remove(this.positionKey);
                     this.bufferId2Offset.Remove(bufferId);
                     this.bufferId2Size.Remove(bufferId);
                     this.bufferId2Buffer.Remove(bufferId);
                 }
+                else
+                {
+                    // re-insert with new position
+                    this.position2BufferId.Add(0, bufferId);
+                }
 
                 removedLength = this.position;
             }
+            else
+            {
+                // re-insert with new position
+                long bufferId = this.position2BufferId[this.positionKey];
+                this.position2BufferId.Remove(this.positionKey);
+                this.position2BufferId.Add(0, bufferId);
+            }
 
             // adjust positions of remaining packets
-            foundKeys = this.position2BufferId.Keys.Where<long>(key => key > this.positionKey);
+            foundKeys = new List<long>(this.position2BufferId.Keys.Where<long>(key => key > this.positionKey).OrderBy<long, long>(key => key));
 
             foreach (long key in foundKeys)
             {
                 long bufferId = this.position2BufferId[key];
                 this.position2BufferId.Remove(key);
+                if (key - removedLength < 0)
+                {
+                    int n = 1;
+                }
+                if (this.position2BufferId.ContainsKey(key - removedLength))
+                {
+                    int n = 1;
+                }
                 this.position2BufferId.Add(key - removedLength, bufferId);
             }
 
             this.totalLength -= removedLength;
-            this.Position = 0;
             this.positionKey = 0;
+            this.Position = 0;
         }
 
         #endregion

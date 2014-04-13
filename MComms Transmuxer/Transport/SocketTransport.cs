@@ -596,25 +596,38 @@
                 return;
             }
 
-            ClientContext client = (ClientContext)asyncContext.UserToken;
+            PacketBuffer packet = null;
 
-            PacketBuffer packet = Global.Allocator.LockBuffer();
-            if (packet == null)
+            lock (this) // to force packet processing in received order
             {
-                // TODO: process it
-            }
-            else
-            {
-                Array.Copy(asyncContext.Buffer, packet.Buffer, asyncContext.BytesTransferred);
-                packet.ActualBufferSize = asyncContext.BytesTransferred;
+                ClientContext client = (ClientContext)asyncContext.UserToken;
+
+                packet = Global.Allocator.LockBuffer();
+                if (packet == null)
+                {
+                    // TODO: process it
+                    Debug.WriteLine("Packet is null");
+                }
+                else
+                {
+                    //Debug.WriteLine("Received {0} bytes:", asyncContext.BytesTransferred);
+                    //for (int i = 0; i < asyncContext.BytesTransferred; ++i)
+                    //{
+                    //    if (i % 16 == 0) Debug.WriteLine("");
+                    //    Debug.Write(asyncContext.Buffer[i + asyncContext.Offset].ToString("X2") + " ");
+                    //}
+                    //Debug.WriteLine("");
+                    Array.Copy(asyncContext.Buffer, asyncContext.Offset, packet.Buffer, 0, asyncContext.BytesTransferred);
+                    packet.ActualBufferSize = asyncContext.BytesTransferred;
+                }
+
+                // report new packet
+                this.OnReceive((IPEndPoint)client.Socket.RemoteEndPoint, packet);
             }
 
             // back to receiving loop
             this.receiveBufferManager.FreeBuffer(asyncContext);
             this.StartReceive(asyncContext);
-
-            // report new packet
-            this.OnReceive((IPEndPoint)client.Socket.RemoteEndPoint, packet);
 
             // release packet
             packet.Release();

@@ -219,7 +219,7 @@ namespace MComms_Transmuxer.Common
 		public int ReadInt32()
 		{
 			ReadInternal(buffer, 4);
-			return bitConverter.ToInt32(buffer, 0);
+			return bitConverter.ToInt32(buffer, 0, 4);
 		}
 
         /// <summary>
@@ -231,7 +231,7 @@ namespace MComms_Transmuxer.Common
         public int ReadInt32(int byteCount)
         {
             ReadInternal(buffer, byteCount);
-            return bitConverter.ToInt32(buffer, 0);
+            return bitConverter.ToInt32(buffer, 0, byteCount);
         }
 
         /// <summary>
@@ -247,11 +247,11 @@ namespace MComms_Transmuxer.Common
             switch (endianness)
             {
                 case Endianness.BigEndian:
-                    return bigEndianBitConverter.ToInt32(buffer, 0);
+                    return bigEndianBitConverter.ToInt32(buffer, 0, byteCount);
                 case Endianness.LittleEndian:
-                    return littleEndianBitConverter.ToInt32(buffer, 0);
+                    return littleEndianBitConverter.ToInt32(buffer, 0, byteCount);
                 default:
-                    return bitConverter.ToInt32(buffer, 0);
+                    return bitConverter.ToInt32(buffer, 0, byteCount);
             }
         }
 

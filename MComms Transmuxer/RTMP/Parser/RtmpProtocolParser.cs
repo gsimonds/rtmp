@@ -10,6 +10,7 @@
 
     class RtmpProtocolParser
     {
+        private int chunkSize = Global.RtmpDefaultChunkSize;
         private PacketBufferStream dataStream = new PacketBufferStream();
         private RtmpHandshake handshake = new RtmpHandshake();
         private Dictionary<uint, RtmpChunkStream> chunkStreams = new Dictionary<uint, RtmpChunkStream>();
@@ -25,7 +26,7 @@
             this.State = RtmpSessionState.Uninitialized;
 
             // allocate data for chunk control stream
-            this.chunkStreams.Add(2, new RtmpChunkStream(2));
+            this.chunkStreams.Add(2, new RtmpChunkStream(2, this.ChunkSize));
         }
 
         /// <summary>
@@ -35,6 +36,19 @@
         /// in the same chunked format
         /// </summary>
         public RtmpSessionState State { get; set; }
+
+        public int ChunkSize
+        {
+            get { return this.chunkSize; }
+            set
+            {
+                this.chunkSize = value;
+                foreach (RtmpChunkStream chunkStream in this.chunkStreams.Values)
+                {
+                    chunkStream.ChunkSize = value;
+                }
+            }
+        }
 
         public RtmpMessage Decode(PacketBuffer dataPacket)
         {
@@ -85,7 +99,7 @@
                         {
                             if (!this.chunkStreams.ContainsKey(hdr.ChunkStreamId))
                             {
-                                this.chunkStreams.Add(hdr.ChunkStreamId, new RtmpChunkStream(hdr.ChunkStreamId));
+                                this.chunkStreams.Add(hdr.ChunkStreamId, new RtmpChunkStream(hdr.ChunkStreamId, this.ChunkSize));
                             }
 
                             msg = this.chunkStreams[hdr.ChunkStreamId].Decode(hdr, this.dataStream);

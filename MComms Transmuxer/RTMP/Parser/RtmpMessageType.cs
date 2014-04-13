@@ -25,6 +25,7 @@
 
     enum RtmpIntMessageType
     {
+        Undetermined,
         HandshakeC0,
         HandshakeS0,
         HandshakeC1,
@@ -42,13 +43,18 @@
         Data, // 0x12 (AMF0)
         SharedObject, // 0x13 (AMF0)
         // 0x14 (AMF0):
-        CommandConnect,
-        CommandCreateStream,
-        CommandDeleteStream,
-        CommandReleaseStream,
-        CommandFCPublish,
-        CommandFCUnpublish,
-        CommandPublish,
+        CommandNetConnectionConnect,
+        CommandNetConnectionCreateStream,
+        CommandNetConnectionReleaseStream,
+        CommandNetConnectionFCPublish,
+        CommandNetConnectionOnFCPublish,
+        CommandNetConnectionFCUnpublish,
+        CommandNetStreamDeleteStream,
+        CommandNetStreamPublish,
+        CommandNetStreamOnStatus,
+        CommandResult,
+        CommandError,
+        CommandUnsupported,
         Aggregate, // 0x16
     }
 }

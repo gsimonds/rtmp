@@ -193,7 +193,30 @@ namespace MComms_Transmuxer.Common
 			WriteInternal(buffer, 4);
 		}
 
-		/// <summary>
+        public void Write(int value, int byteCount)
+        {
+            bitConverter.CopyBytes(value, buffer, 0, byteCount);
+            WriteInternal(buffer, byteCount);
+        }
+
+        public void Write(int value, int byteCount, Endianness endianness)
+        {
+            switch (endianness)
+            {
+                case Endianness.BigEndian:
+                    bigEndianBitConverter.CopyBytes(value, buffer, 0, byteCount);
+                    break;
+                case Endianness.LittleEndian:
+                    littleEndianBitConverter.CopyBytes(value, buffer, 0, byteCount);
+                    break;
+                default:
+                    bitConverter.CopyBytes(value, buffer, 0, byteCount);
+                    break;
+            }
+            WriteInternal(buffer, byteCount);
+        }
+
+        /// <summary>
 		/// Writes a 64-bit signed integer to the stream, using the bit converter
 		/// for this writer. 8 bytes are written.
 		/// </summary>
