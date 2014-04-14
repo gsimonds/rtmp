@@ -75,7 +75,16 @@
             {
                 if (this.freeBuffers.Count == 0)
                 {
-                    return null;
+                    int addBufferCount = this.bufferCount / 10;
+                    Global.Log.WarnFormat("No more empty buffers, allocate additional {0} buffers", addBufferCount);
+
+                    for (int i = 0; i < addBufferCount; ++i)
+                    {
+                        this.freeBuffers.Add(new PacketBuffer(this, this.bufferSize));
+                    }
+
+                    this.bufferCount += addBufferCount;
+                    this.freeBufferCount = addBufferCount;
                 }
 
                 PacketBuffer buffer = this.freeBuffers[0];

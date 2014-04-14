@@ -72,7 +72,7 @@
                 Timestamp = this.Timestamp,
                 ChunkStreamId = this.ChunkStreamId,
                 MessageStreamId = this.MessageStreamId,
-                MessageType = RtmpMessageType.Command
+                MessageType = RtmpMessageType.CommandAmf0
             };
 
             int hdrSize = hdr.HeaderSize;

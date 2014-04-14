@@ -17,6 +17,7 @@
         private volatile bool isRunning = false;
         private Thread controlThread = null;
         private Dictionary<IPEndPoint, RtmpSession> sessions = new Dictionary<IPEndPoint, RtmpSession>();
+        private long sessionCounter = 0;
 
         public RtmpServer()
         {
@@ -43,7 +44,7 @@
             this.isRunning = true;
             this.controlThread.Start();
 
-            this.transport.Start(new IPEndPoint(IPAddress.Any, 1935), System.Net.Sockets.ProtocolType.Tcp);
+            this.transport.Start(new IPEndPoint(IPAddress.Any, Properties.Settings.Default.RtmpPort), System.Net.Sockets.ProtocolType.Tcp);
         }
 
         public void Stop()
@@ -56,9 +57,12 @@
 
         private void ControlThreadProc()
         {
+            Global.Log.Debug("RtmpServer main thread started");
+
             while (this.isRunning)
             {
                 // TODO: implement general server control logic
+                Thread.Sleep(1);
             }
         }
 
@@ -72,7 +76,7 @@
                     return;
                 }
 
-                RtmpSession session = new RtmpSession(this.transport, e.EndPoint);
+                RtmpSession session = new RtmpSession(++this.sessionCounter, this.transport, e.EndPoint);
                 sessions.Add(e.EndPoint, session);
             }
         }

@@ -18,6 +18,7 @@
         /// </summary>
         static void Main(string[] args)
         {
+            Global.Log.Info("Starting MComms Transmuxer...");
             if (System.Environment.UserInteractive)
             {
                 if (args.Length > 0)
@@ -27,9 +28,11 @@
                         case "-standalone":
                             {
                                 // TODO: adjust
-                                Global.Allocator = new PacketBufferAllocator(10240, 10240);
+                                Global.Allocator = new PacketBufferAllocator(10240, 1024);
                                 RtmpServer server = new RtmpServer();
                                 server.Start();
+
+                                Global.Log.Info("MComms Transmuxer started in UI mode");
 
                                 while (true)
                                 {
@@ -44,6 +47,7 @@
             }
             else
             {
+                Global.Log.Debug("MComms Transmuxer service started in UI mode");
                 ServiceBase[] ServicesToRun;
                 ServicesToRun = new ServiceBase[] 
                 { 
@@ -51,6 +55,8 @@
                 };
                 ServiceBase.Run(ServicesToRun);
             }
+
+            Global.Log.Info("MComms Transmuxer stopped");
         }
     }
 }
