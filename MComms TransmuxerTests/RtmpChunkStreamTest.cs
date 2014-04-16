@@ -90,7 +90,8 @@ namespace MComms_TransmuxerTests
 			PacketBufferStream dataStream = null; // TODO: Initialize to an appropriate value
 			RtmpMessage expected = null; // TODO: Initialize to an appropriate value
 			RtmpMessage actual;
-			actual = target.Decode(hdr, dataStream);
+            bool canContinue = true;
+			actual = target.Decode(hdr, dataStream, ref canContinue);
 			Assert.AreEqual(expected, actual);
 			Assert.Inconclusive("Verify the correctness of this test method.");
 		}

@@ -73,9 +73,10 @@ namespace MComms_TransmuxerTests
 		[TestMethod()]
 		public void OnReceiveTest()
 		{
+            int sessionId = 1;
 			SocketTransport transport = null; // TODO: Initialize to an appropriate value
 			IPEndPoint sessionEndPoint = null; // TODO: Initialize to an appropriate value
-			RtmpSession target = new RtmpSession(transport, sessionEndPoint); // TODO: Initialize to an appropriate value
+			RtmpSession target = new RtmpSession(sessionId, transport, sessionEndPoint); // TODO: Initialize to an appropriate value
 			PacketBuffer packet = null; // TODO: Initialize to an appropriate value
 			target.OnReceive(packet);
 			Assert.Inconclusive("A method that does not return a value cannot be verified.");
