@@ -16,19 +16,22 @@
         private long timestampDelta = -1;
         private int messageLength = -1;
         private RtmpMessageType messageType = RtmpMessageType.Undefined;
-        private int messageStreamId = -1;
 
-        private Dictionary<long, PacketBufferStream> incompleteMessageStreams = new Dictionary<long,PacketBufferStream>();
+        private PacketBufferStream incompleteMessageStream = null;
+        private RtmpChunkHeader incompleteMessageChunkHeader = null;
 
         public RtmpChunkStream(uint chunkStreamId, int chunkSize)
         {
             this.chunkStreamId = chunkStreamId;
             this.ChunkSize = chunkSize;
+            this.MessageStreamId = -1;
         }
 
         public int ChunkSize { get; set; }
 
-        public RtmpMessage Decode(RtmpChunkHeader hdr, PacketBufferStream dataStream)
+        public int MessageStreamId { get; set; }
+
+        public RtmpMessage Decode(RtmpChunkHeader hdr, PacketBufferStream dataStream, ref bool canContinue)
         {
             // apply/save chunk stream context
             switch (hdr.Format)
@@ -37,57 +40,87 @@
                     this.timestamp = hdr.Timestamp;
                     this.messageLength = hdr.MessageLength;
                     this.messageType = hdr.MessageType;
-                    this.messageStreamId = hdr.MessageStreamId;
+                    this.MessageStreamId = hdr.MessageStreamId;
                     break;
+
                 case 1:
                     this.timestampDelta = hdr.TimestampDelta;
-                    this.timestamp += this.timestampDelta;
                     this.messageLength = hdr.MessageLength;
                     this.messageType = hdr.MessageType;
                     hdr.Timestamp = this.timestamp;
-                    hdr.TimestampDelta = this.timestampDelta;
-                    hdr.MessageStreamId = this.messageStreamId;
+                    hdr.MessageStreamId = this.MessageStreamId;
                     break;
+
                 case 2:
                     this.timestampDelta = hdr.TimestampDelta;
-                    this.timestamp += this.timestampDelta;
                     hdr.Timestamp = this.timestamp;
-                    hdr.TimestampDelta = this.timestampDelta;
                     hdr.MessageLength = this.messageLength;
                     hdr.MessageType = this.messageType;
-                    hdr.MessageStreamId = this.messageStreamId;
+                    hdr.MessageStreamId = this.MessageStreamId;
                     break;
+
                 case 3:
-                    if (this.timestampDelta > 0)
-                    {
-                        this.timestamp += this.timestampDelta;
-                    }
                     hdr.Timestamp = this.timestamp;
                     hdr.TimestampDelta = this.timestampDelta;
                     hdr.MessageLength = this.messageLength;
                     hdr.MessageType = this.messageType;
-                    hdr.MessageStreamId = this.messageStreamId;
+                    hdr.MessageStreamId = this.MessageStreamId;
                     break;
+            }
+
+            // validate header
+            bool bValid = false;
+            if (hdr.Timestamp >= 0 && hdr.MessageLength >= 0 && hdr.MessageType != RtmpMessageType.Undefined)
+            {
+                bValid = true;
+            }
+
+            if (!bValid)
+            {
+                // drop everything in current stream (trying to re-align to the next chunk)
+                Global.Log.ErrorFormat("Received corrupted chunk header");
+                Global.Log.ErrorFormat("Dropping {0} bytes and re-aligning to the next chunk...", dataStream.Length - dataStream.Position + hdr.HeaderSize);
+                dataStream.Seek(0, System.IO.SeekOrigin.End);
+                dataStream.TrimBegin();
+                return null;
             }
 
             RtmpMessage msg = null;
 
-            if (hdr.MessageLength <= this.ChunkSize)
+            bool assemblingMessage = false;
+            if (this.incompleteMessageChunkHeader != null)
+            {
+                if (this.incompleteMessageChunkHeader.MessageType == hdr.MessageType &&
+                    this.incompleteMessageChunkHeader.MessageStreamId == hdr.MessageStreamId &&
+                    this.incompleteMessageChunkHeader.MessageLength == hdr.MessageLength)
+                {
+                    // we need this to process partially received message
+                    // after increase of chunk size
+                    assemblingMessage = true;
+                }
+            }
+
+            if (hdr.MessageLength <= this.ChunkSize && !assemblingMessage)
             {
                 // simplest case: the whole message in the chunk
+
+                // this is the whole message, add delta to timestamp if it was specified
+                if (this.timestampDelta > 0)
+                {
+                    this.timestamp += this.timestampDelta;
+                    hdr.Timestamp = this.timestamp;
+                }
+
                 if (hdr.MessageLength > dataStream.Length - dataStream.Position)
                 {
-                    return null; // not enough data
+                    // can't continue parsing, need to receive more data
+                    canContinue = false;
+                    return null;
                 }
 
-                Debug.WriteLine("Received message: {0} bytes, type {1}", hdr.MessageLength, hdr.MessageType);
+                //Global.Log.DebugFormat("Received message: {0} bytes, type {1}", hdr.MessageLength, hdr.MessageType);
 
                 msg = RtmpMessage.Decode(hdr, dataStream);
-
-                if (dataStream.Position <= 12)
-                {
-                    int n = 1;
-                }
 
                 // drop parsed data even if message decoding failed
                 // (which means we don't support something in this message)
@@ -95,47 +128,60 @@
             }
             else
             {
-                PacketBufferStream msgStream = null;
-
-                if (incompleteMessageStreams.ContainsKey(hdr.Timestamp))
+                if (this.incompleteMessageStream == null)
                 {
-                    msgStream = incompleteMessageStreams[hdr.Timestamp];
-                }
-                else
-                {
-                    // create new entry
-                    msgStream = new PacketBufferStream();
-                    incompleteMessageStreams.Add(hdr.Timestamp, msgStream);
+                    this.incompleteMessageStream = new PacketBufferStream();
+                    this.incompleteMessageChunkHeader = hdr;
+
+                    // this is the first chunk of the message, add delta to timestamp if it was specified
+                    if (this.timestampDelta > 0)
+                    {
+                        this.timestamp += this.timestampDelta;
+                        hdr.Timestamp = this.timestamp;
+                    }
                 }
 
-                int chunkLength = Math.Min((int)(hdr.MessageLength - msgStream.Length), this.ChunkSize);
+                int chunkLength = Math.Min((int)(hdr.MessageLength - this.incompleteMessageStream.Length), this.ChunkSize);
                 if (chunkLength > dataStream.Length - dataStream.Position)
                 {
-                    return null; // not enough data
+                    // can't continue parsing, need to receive more data
+                    canContinue = false;
+                    return null;
                 }
 
-                Debug.WriteLine("Received chunk: {2} bytes, type {1}, message length {0}", hdr.MessageLength, hdr.MessageType, chunkLength);
+                //Global.Log.DebugFormat("Received chunk: {2} bytes, type {1}, message length {0}", hdr.MessageLength, hdr.MessageType, chunkLength);
 
                 // append received chunk to previous ones
-                dataStream.CopyTo(msgStream, chunkLength);
+                dataStream.CopyTo(this.incompleteMessageStream, chunkLength);
                 dataStream.TrimBegin();
 
-                if (msgStream.Length == hdr.MessageLength)
+                if (this.incompleteMessageStream.Length >= hdr.MessageLength)
                 {
-                    Debug.WriteLine("Received message: {0} bytes (last chunk {2}), type {1}", hdr.MessageLength, hdr.MessageType, chunkLength);
+                    //Global.Log.DebugFormat("Received message: {0} bytes (last chunk {2}), type {1}", hdr.MessageLength, hdr.MessageType, chunkLength);
 
                     // we've received complete message, parse it
-                    incompleteMessageStreams.Remove(hdr.Timestamp);
-                    msgStream.Seek(0, System.IO.SeekOrigin.Begin);
-                    msg = RtmpMessage.Decode(hdr, msgStream);
+                    this.incompleteMessageStream.Seek(0, System.IO.SeekOrigin.Begin);
+                    msg = RtmpMessage.Decode(hdr, this.incompleteMessageStream);
 
                     // drop parsed data even if message decoding failed
                     // (which means we don't support something in this message)
-                    msgStream.Dispose();
+                    this.incompleteMessageStream.Dispose();
+                    this.incompleteMessageStream = null;
+                    this.incompleteMessageChunkHeader = null;
                 }
             }
 
             return msg;
+        }
+
+        public void Abort()
+        {
+            if (this.incompleteMessageStream != null)
+            {
+                this.incompleteMessageStream.Dispose();
+                this.incompleteMessageStream = null;
+                this.incompleteMessageChunkHeader = null;
+            }
         }
     }
 }

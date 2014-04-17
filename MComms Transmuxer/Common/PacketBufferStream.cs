@@ -224,7 +224,7 @@
         {
             if (this.position == this.totalLength)
             {
-                Debug.WriteLine("Insert: added buffer {0}, size {1}, offset {2}", buffer.Id, count, offset);
+                //Global.Log.DebugFormat("Added buffer {0}, size {1}, offset {2}", buffer.Id, count, offset);
                 if (this.totalLength < 0)
                 {
                     int n = 1;
@@ -243,17 +243,18 @@
             }
         }
 
-        public void CopyTo(PacketBufferStream buffer, int count)
+        public void CopyTo(PacketBufferStream stream, int count)
         {
             // TODO: implement properly
             PacketBuffer packet = Global.Allocator.LockBuffer();
             packet.ActualBufferSize = count;
             Read(packet.Buffer, 0, count);
-            if (buffer.Length > 0)
+            if (stream.Length > 0)
             {
-                buffer.Seek(0, System.IO.SeekOrigin.End);
+                stream.Seek(0, System.IO.SeekOrigin.End);
             }
-            buffer.Insert(packet, 0, count);
+            stream.Insert(packet, 0, count);
+            packet.Release();
         }
 
         /// <summary>
@@ -261,7 +262,7 @@
         /// </summary>
         public void TrimBegin()
         {
-            //Debug.WriteLine("TrimBegin: pos {0}, key {1}", this.Position, this.positionKey);
+            //Global.Log.DebugFormat("Pos {0}, key {1}", this.Position, this.positionKey);
 
             List<long> foundKeys = new List<long>(this.position2BufferId.Keys.Where<long>(key => key < this.positionKey));
             long removedLength = 0;
@@ -293,7 +294,7 @@
             {
                 long gap = this.position - removedLength;
                 long bufferId = this.position2BufferId[this.positionKey];
-                Debug.WriteLine("TrimBegin: trim pos {4}, buffer {0}, size {1}, offset {2}, gap {3}", bufferId, this.bufferId2Size[bufferId], this.bufferId2Offset[bufferId], gap, this.position);
+                //Global.Log.DebugFormat("Trim pos {4}, buffer {0}, size {1}, offset {2}, gap {3}", bufferId, this.bufferId2Size[bufferId], this.bufferId2Offset[bufferId], gap, this.position);
                 this.bufferId2Size[bufferId] -= gap;
                 this.bufferId2Offset[bufferId] += gap;
 

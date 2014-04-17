@@ -13,6 +13,7 @@
 
     class RtmpSession : IDisposable
     {
+        private long sessionId = 0;
         private SocketTransport transport = null;
         private IPEndPoint sessionEndPoint = null;
         private volatile bool isRunning = true;
@@ -21,9 +22,17 @@
         private Thread sessionThread = null;
         private Queue<PacketBuffer> receivedPackets = new Queue<PacketBuffer>();
         private RtmpHandshake handshakeS1 = null;
+        private int messageStreamCounter = 1;
+        private ulong receivedSize = 0;
+        private ulong sentSize = 0;
+        private ulong lastReportedReceivedSize = 0;
+        private ulong lastReportedSentSize = 0;
+        private uint receiveAckWindowSize = Global.RtmpDefaultAckWindowSize;
+        private uint sendAckWindowSize = Global.RtmpDefaultAckWindowSize;
 
-        public RtmpSession(SocketTransport transport, IPEndPoint sessionEndPoint)
+        public RtmpSession(long sessionId, SocketTransport transport, IPEndPoint sessionEndPoint)
         {
+            this.sessionId = sessionId;
             this.transport = transport;
             this.sessionEndPoint = sessionEndPoint;
             this.sessionThread = new Thread(this.SessionThread);
@@ -50,58 +59,80 @@
             while (this.isRunning)
             {
                 PacketBuffer packet = null;
+                bool nothingToDo = true;
 
                 lock (this.receivedPackets)
                 {
                     if (this.receivedPackets.Count > 0)
                     {
+                        nothingToDo = false;
                         packet = this.receivedPackets.Dequeue();
+                        receivedSize += (ulong)packet.ActualBufferSize;
                     }
                 }
 
-                //if (packet != null)
+                try
                 {
                     RtmpMessage msg = null;
-                    try
+                    while ((msg = parser.Decode(packet)) != null)
                     {
-                        while ((msg = parser.Decode(packet)) != null)
-                        {
-                            this.ProcessMessage(msg);
-                            if (packet != null)
-                            {
-                                packet.Release();
-                                packet = null;
-                            }
-                        }
-
+                        nothingToDo = false;
+                        this.ProcessMessage(msg);
                         if (packet != null)
                         {
                             packet.Release();
                             packet = null;
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        // something went wrong, drop the session
-                        if (packet != null)
-                        {
-                            packet.Release();
-                        }
-                        this.transport.Disconnect(this.sessionEndPoint);
-                        break;
-                    }
                 }
-                //else
+                catch (Exception ex)
                 {
-                    // sleep only if don't have anything to do
-                    //Thread.Sleep(1);
+                    // something went wrong, drop the session
+                    if (packet != null)
+                    {
+                        packet.Release();
+                        packet = null;
+                    }
+
+                    Global.Log.ErrorFormat("End point {0}: exception {1}, dropping session...", this.sessionEndPoint, ex.ToString());
+                    this.transport.Disconnect(this.sessionEndPoint);
+                    break;
+                }
+
+                if (packet != null)
+                {
+                    packet.Release();
+                    packet = null;
+                }
+
+                if (this.receiveAckWindowSize > 0)
+                {
+                    if ((this.receivedSize - this.lastReportedReceivedSize) >= this.receiveAckWindowSize)
+                    {
+                        this.parser.Encode(new RtmpMessageAck((uint)(this.receivedSize - this.lastReportedReceivedSize)));
+                        this.lastReportedReceivedSize = this.receivedSize;
+                    }
                 }
 
                 // send packets if any
                 while ((packet = this.parser.GetSendPacket()) != null)
                 {
+                    nothingToDo = false;
                     this.transport.Send(this.sessionEndPoint, packet);
+
+                    sentSize += (uint)packet.ActualBufferSize;
+                    if (sentSize > uint.MaxValue)
+                    {
+                        sentSize -= uint.MaxValue;
+                    }
+
                     packet.Release();
+                }
+
+                if (nothingToDo)
+                {
+                    // sleep only if we don't have anything to do
+                    Thread.Sleep(1);
                 }
             }
         }
@@ -169,6 +200,8 @@
                         {
                             this.state = RtmpSessionState.Receiving;
                             this.parser.State = RtmpSessionState.Receiving;
+                            // register control message stream
+                            this.parser.RegisterMessageStream(0);
                         }
                         else
                         {
@@ -183,6 +216,64 @@
                     {
                         RtmpMessageSetChunkSize recvCtrl = (RtmpMessageSetChunkSize)msg;
                         this.parser.ChunkSize = (int)recvCtrl.ChunkSize;
+                        Global.Log.DebugFormat("End point {0}: received {1}, new chunk size {2}", this.sessionEndPoint, msg.MessageType, recvCtrl.ChunkSize);
+                        break;
+                    }
+
+                case RtmpIntMessageType.ProtoControlAbort:
+                    {
+                        RtmpMessageAbort recvCtrl = (RtmpMessageAbort)msg;
+                        this.parser.Abort((uint)recvCtrl.TargetChunkStreamId);
+                        Global.Log.DebugFormat("End point {0}: received {1}, aborted chunk stream {2}", this.sessionEndPoint, msg.MessageType, recvCtrl.TargetChunkStreamId);
+                        break;
+                    }
+
+                case RtmpIntMessageType.ProtoControlAknowledgement:
+                    {
+                        RtmpMessageAck recvCtrl = (RtmpMessageAck)msg;
+                        this.lastReportedSentSize = recvCtrl.ReceivedBytes;
+                        Global.Log.DebugFormat("End point {0}: received {1}, reported size {2}, actually sent {3}", this.sessionEndPoint, msg.MessageType, recvCtrl.ReceivedBytes, this.sentSize);
+                        // TODO: limit sending???
+                        break;
+                    }
+
+                case RtmpIntMessageType.ProtoControlUserControl:
+                    {
+                        RtmpMessageUserControl recvCtrl = (RtmpMessageUserControl)msg;
+                        switch (recvCtrl.EventType)
+                        {
+                            case RtmpMessageUserControl.EventTypes.SetBufferLength:
+                                Global.Log.DebugFormat("End point {0}: received {1}, event {2}, message stream id {3}, buffer length {4}", this.sessionEndPoint, msg.MessageType, recvCtrl.EventType, recvCtrl.TargetMessageStreamId, recvCtrl.BufferLength);
+                                break;
+                            case RtmpMessageUserControl.EventTypes.PingRequest:
+                            case RtmpMessageUserControl.EventTypes.PingResponse:
+                                Global.Log.DebugFormat("End point {0}: received {1}, event {2}, timestamp {3}", this.sessionEndPoint, msg.MessageType, recvCtrl.EventType, recvCtrl.Timestamp);
+                                break;
+                            default:
+                                Global.Log.DebugFormat("End point {0}: received {1}, event {2}, message stream id {3}", this.sessionEndPoint, msg.MessageType, recvCtrl.EventType, recvCtrl.TargetMessageStreamId);
+                                break;
+                        }
+                        // TODO: support ping request?
+                        break;
+                    }
+
+                case RtmpIntMessageType.ProtoControlWindowAknowledgementSize:
+                    {
+                        RtmpMessageWindowAckSize recvCtrl = (RtmpMessageWindowAckSize)msg;
+                        this.receiveAckWindowSize = recvCtrl.AckSize;
+                        Global.Log.DebugFormat("End point {0}: received {1}, new recv window size {2}", this.sessionEndPoint, msg.MessageType, recvCtrl.AckSize);
+                        break;
+                    }
+
+                case RtmpIntMessageType.ProtoControlSetPeerBandwidth:
+                    {
+                        RtmpMessageSetPeerBandwidth recvCtrl = (RtmpMessageSetPeerBandwidth)msg;
+                        if (this.sendAckWindowSize != recvCtrl.AckSize)
+                        {
+                            this.sendAckWindowSize = recvCtrl.AckSize;
+                            this.parser.Encode(new RtmpMessageWindowAckSize(this.sendAckWindowSize));
+                        }
+                        Global.Log.DebugFormat("End point {0}: received {1}, new send window size {2}", this.sessionEndPoint, msg.MessageType, recvCtrl.AckSize);
                         break;
                     }
 
@@ -216,13 +307,12 @@
                         // prepare reply
 
                         // send window acknowledgement size
-                        this.parser.Encode(new RtmpMessageWindowAckSize(2500000));
+                        this.parser.Encode(new RtmpMessageWindowAckSize(this.sendAckWindowSize));
 
                         // send peer bandwidth
-                        this.parser.Encode(new RtmpMessageSetPeerBandwidth(2500000, RtmpMessageSetPeerBandwidth.LimitTypes.Dynamic));
+                        this.parser.Encode(new RtmpMessageSetPeerBandwidth(this.receiveAckWindowSize, RtmpMessageSetPeerBandwidth.LimitTypes.Dynamic));
 
-                        // User Control: Stream 0 Begins
-                        // TODO: send it autimatically for every new message stream
+                        // send user control event "Stream 0 Begins"
                         this.parser.Encode(new RtmpMessageUserControl(RtmpMessageUserControl.EventTypes.StreamBegin, 0));
 
                         // set sunk size to 1024 bytes
@@ -232,8 +322,8 @@
                         List<object> pars = new List<object>();
 
                         RtmpAmfObject amf = new RtmpAmfObject();
-                        amf.Strings.Add("fmsVer", "FMS/3,5,4,210"); // TODO: adjust?
-                        amf.Numbers.Add("capabilities", 31); // TODO: adjust
+                        amf.Strings.Add("fmsVer", "FMS/3,0,1,123"); // NOTE: value taken from FFmpeg implementation
+                        amf.Numbers.Add("capabilities", 31); // NOTE: value taken from FFmpeg implementation
                         amf.Numbers.Add("mode", 1); // TODO: adjust
                         pars.Add(amf);
 
@@ -242,8 +332,8 @@
                         amf.Strings.Add("code", "NetConnection.Connect.Success");
                         amf.Strings.Add("description", "Connection succeeded.");
                         // TODO: "data" array?
-                        amf.Numbers.Add("clientId", 1); // TODO: set proper
-                        amf.Numbers.Add("objectEncoding", 0);
+                        amf.Numbers.Add("clientId", this.sessionId);
+                        amf.Numbers.Add("objectEncoding", 0); // AMF0
                         pars.Add(amf);
 
                         RtmpMessageCommand sendComm = new RtmpMessageCommand("_result", 1, pars);
@@ -296,7 +386,7 @@
                         amf.Strings.Add("level", "status");
                         amf.Strings.Add("code", "NetStream.Publish.Start");
                         amf.Strings.Add("description", "FCPublish to stream " + publishStreamName);
-                        amf.Numbers.Add("clientId", 1); // TODO: set proper
+                        amf.Numbers.Add("clientId", this.sessionId);
                         pars.Add(amf);
 
                         RtmpMessageCommand sendComm = new RtmpMessageCommand("onFCPublish", 0, pars);
@@ -319,9 +409,12 @@
 
                         RtmpMessageCommand recvComm = (RtmpMessageCommand)msg;
 
+                        // register new message stream
+                        this.parser.RegisterMessageStream(this.messageStreamCounter);
+
                         List<object> pars = new List<object>();
                         pars.Add(new RtmpAmfNull());
-                        pars.Add((double)1.0); // TODO: create stream automatically
+                        pars.Add((double)this.messageStreamCounter++);
 
                         RtmpMessageCommand sendComm = new RtmpMessageCommand("_result", recvComm.TransactionId, pars);
                         sendComm.ChunkStreamId = recvComm.ChunkStreamId;
@@ -337,6 +430,7 @@
                         if (this.state != RtmpSessionState.Receiving)
                         {
                             // wrong state
+                            Global.Log.ErrorFormat("End point {0}: Command {1}, wrong state {2}, dropping session...", this.sessionEndPoint, msg.MessageType, this.state);
                             this.transport.Disconnect(this.sessionEndPoint);
                             break;
                         }
@@ -347,6 +441,7 @@
                             recvComm.Parameters[2].GetType() != typeof(string))
                         {
                             // wrong command parameters
+                            Global.Log.ErrorFormat("End point {0}: Command {1}, corrupted parameters, dropping session...", this.sessionEndPoint, msg.MessageType);
                             this.transport.Disconnect(this.sessionEndPoint);
                             break;
                         }
@@ -358,15 +453,23 @@
                         if (publishType != "live")
                         {
                             // wrong app
+                            Global.Log.ErrorFormat("End point {0}: Command {1}, unsupported publish type {2}, dropping session...", this.sessionEndPoint, msg.MessageType, publishType);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        if (!this.parser.IsMessageStreamRegistered(recvComm.MessageStreamId))
+                        {
+                            // wrong publish sequence
+                            Global.Log.ErrorFormat("End point {0}: Command {1}, unregistered message stream {2}, dropping session...", this.sessionEndPoint, msg.MessageType, recvComm.MessageStreamId);
                             this.transport.Disconnect(this.sessionEndPoint);
                             break;
                         }
 
                         // prepare reply
 
-                        // User Control: Stream 1 Begins
-                        // TODO: send it automatically for every new message stream
-                        this.parser.Encode(new RtmpMessageUserControl(RtmpMessageUserControl.EventTypes.StreamBegin, 1));
+                        // send user control event "Stream N Begins"
+                        this.parser.Encode(new RtmpMessageUserControl(RtmpMessageUserControl.EventTypes.StreamBegin, recvComm.MessageStreamId));
 
                         List<object> pars = new List<object>();
 
@@ -376,7 +479,7 @@
                         amf.Strings.Add("level", "status");
                         amf.Strings.Add("code", "NetStream.Publish.Start");
                         amf.Strings.Add("description", "Publishing " + publishStreamName);
-                        amf.Numbers.Add("clientId", 1); // TODO: set proper
+                        amf.Numbers.Add("clientId", this.sessionId);
                         pars.Add(amf);
 
                         RtmpMessageCommand sendComm = new RtmpMessageCommand("onStatus", 0, pars);

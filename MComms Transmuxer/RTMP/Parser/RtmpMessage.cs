@@ -36,14 +36,14 @@
             {
                 case RtmpMessageType.SetChunkSize:
                     {
-                        if (hdr.ChunkStreamId == 2)
+                        if (hdr.ChunkStreamId != 2)
                         {
-                            // TODO: log warning
+                            Global.Log.WarnFormat("Control message {0} received on wrong chunk stream {1}", hdr.MessageType, hdr.ChunkStreamId);
                         }
 
                         if (hdr.MessageStreamId != 0)
                         {
-                            // TODO: log warning
+                            Global.Log.WarnFormat("Control message {0} received on wrong message stream {1}", hdr.MessageType, hdr.MessageStreamId);
                         }
 
                         using (EndianBinaryReader reader = new EndianBinaryReader(dataStream, true))
@@ -56,14 +56,14 @@
 
                 case RtmpMessageType.Abort:
                     {
-                        if (hdr.ChunkStreamId == 2)
+                        if (hdr.ChunkStreamId != 2)
                         {
-                            // TODO: log warning
+                            Global.Log.WarnFormat("Control message {0} received on wrong chunk stream {1}", hdr.MessageType, hdr.ChunkStreamId);
                         }
 
                         if (hdr.MessageStreamId != 0)
                         {
-                            // TODO: log warning
+                            Global.Log.WarnFormat("Control message {0} received on wrong message stream {1}", hdr.MessageType, hdr.MessageStreamId);
                         }
 
                         using (EndianBinaryReader reader = new EndianBinaryReader(dataStream, true))
@@ -76,14 +76,14 @@
 
                 case RtmpMessageType.Aknowledgement:
                     {
-                        if (hdr.ChunkStreamId == 2)
+                        if (hdr.ChunkStreamId != 2)
                         {
-                            // TODO: log warning
+                            Global.Log.WarnFormat("Control message {0} received on wrong chunk stream {1}", hdr.MessageType, hdr.ChunkStreamId);
                         }
 
                         if (hdr.MessageStreamId != 0)
                         {
-                            // TODO: log warning
+                            Global.Log.WarnFormat("Control message {0} received on wrong message stream {1}", hdr.MessageType, hdr.MessageStreamId);
                         }
 
                         using (EndianBinaryReader reader = new EndianBinaryReader(dataStream, true))
@@ -96,14 +96,14 @@
 
                 case RtmpMessageType.UserControl:
                     {
-                        if (hdr.ChunkStreamId == 2)
+                        if (hdr.ChunkStreamId != 2)
                         {
-                            // TODO: log warning
+                            Global.Log.WarnFormat("Control message {0} received on wrong chunk stream {1}", hdr.MessageType, hdr.ChunkStreamId);
                         }
 
                         if (hdr.MessageStreamId != 0)
                         {
-                            // TODO: log warning
+                            Global.Log.WarnFormat("Control message {0} received on wrong message stream {1}", hdr.MessageType, hdr.MessageStreamId);
                         }
 
                         msg = RtmpMessage.DecodeUserControl(dataStream);
@@ -112,14 +112,14 @@
 
                 case RtmpMessageType.WindowAknowledgementSize:
                     {
-                        if (hdr.ChunkStreamId == 2)
+                        if (hdr.ChunkStreamId != 2)
                         {
-                            // TODO: log warning
+                            Global.Log.WarnFormat("Control message {0} received on wrong chunk stream {1}", hdr.MessageType, hdr.ChunkStreamId);
                         }
 
                         if (hdr.MessageStreamId != 0)
                         {
-                            // TODO: log warning
+                            Global.Log.WarnFormat("Control message {0} received on wrong message stream {1}", hdr.MessageType, hdr.MessageStreamId);
                         }
 
                         using (EndianBinaryReader reader = new EndianBinaryReader(dataStream, true))
@@ -132,14 +132,14 @@
 
                 case RtmpMessageType.SetPeerBandwidth:
                     {
-                        if (hdr.ChunkStreamId == 2)
+                        if (hdr.ChunkStreamId != 2)
                         {
-                            // TODO: log warning
+                            Global.Log.WarnFormat("Control message {0} received on wrong chunk stream {1}", hdr.MessageType, hdr.ChunkStreamId);
                         }
 
                         if (hdr.MessageStreamId != 0)
                         {
-                            // TODO: log warning
+                            Global.Log.WarnFormat("Control message {0} received on wrong message stream {1}", hdr.MessageType, hdr.MessageStreamId);
                         }
 
                         using (EndianBinaryReader reader = new EndianBinaryReader(dataStream, true))
@@ -154,12 +154,13 @@
                     {
                         if (hdr.MessageStreamId == 0)
                         {
-                            // TODO: log error
+                            Global.Log.ErrorFormat("Audio data received on wrong message stream {0}", hdr.MessageStreamId);
+                            dataStream.Seek(hdr.MessageLength, System.IO.SeekOrigin.Current);
                             break;
                         }
 
                         // TODO: implement
-                        Debug.WriteLine("Received audio: {0} bytes, timestamp {1}", hdr.MessageLength, hdr.Timestamp);
+                        Global.Log.DebugFormat("Received audio: {0} bytes, timestamp {1}", hdr.MessageLength, hdr.Timestamp);
                         dataStream.Seek(hdr.MessageLength, System.IO.SeekOrigin.Current);
                         break;
                     }
@@ -168,54 +169,43 @@
                     {
                         if (hdr.MessageStreamId == 0)
                         {
-                            // TODO: log error
+                            Global.Log.ErrorFormat("Video data received on wrong message stream {0}", hdr.MessageStreamId);
+                            dataStream.Seek(hdr.MessageLength, System.IO.SeekOrigin.Current);
                             break;
                         }
 
                         // TODO: implement
-                        Debug.WriteLine("Received video: {0} bytes, timestamp {1}", hdr.MessageLength, hdr.Timestamp);
+                        Global.Log.DebugFormat("Received video: {0} bytes, timestamp {1}", hdr.MessageLength, hdr.Timestamp);
                         dataStream.Seek(hdr.MessageLength, System.IO.SeekOrigin.Current);
                         break;
                     }
 
-                case RtmpMessageType.Data:
+                case RtmpMessageType.DataAmf0:
                     {
                         if (hdr.MessageStreamId == 0)
                         {
-                            // TODO: log error
+                            Global.Log.ErrorFormat("Metadata received on wrong message stream {0}", hdr.MessageStreamId);
+                            dataStream.Seek(hdr.MessageLength, System.IO.SeekOrigin.Current);
                             break;
                         }
 
                         // TODO: implement
-                        Debug.WriteLine("Received metadata: {0} bytes, timestamp {1}", hdr.MessageLength, hdr.Timestamp);
+                        Global.Log.DebugFormat("Received metadata: {0} bytes, timestamp {1}", hdr.MessageLength, hdr.Timestamp);
                         dataStream.Seek(hdr.MessageLength, System.IO.SeekOrigin.Current);
                         break;
                     }
 
-                case RtmpMessageType.SharedObject:
-                    {
-                        // TODO: log warning
-                        int n = 1;
-                        break;
-                    }
-
-                case RtmpMessageType.Command:
+                case RtmpMessageType.CommandAmf0:
                     {
                         msg = RtmpMessage.DecodeCommand(hdr, dataStream);
                         break;
                     }
 
-                case RtmpMessageType.Aggregate:
-                    {
-                        // TODO: log warning
-                        int n = 1;
-                        break;
-                    }
-
                 default:
                     {
-                        // TODO: log warning
-                        int n = 1;
+                        Global.Log.WarnFormat("Received unsupported message: type {0}, format {1}, chunk stream {2}, msg stream {3}, timestamp {4}, length {5}",
+                            hdr.MessageType, hdr.Format, hdr.ChunkStreamId, hdr.MessageStreamId, hdr.Timestamp, hdr.MessageLength);
+                        dataStream.Seek(hdr.MessageLength, System.IO.SeekOrigin.Current);
                         break;
                     }
             }
@@ -370,7 +360,7 @@
             }
 
             RtmpMessageCommand msg = new RtmpMessageCommand((string)pars[0], (int)(double)pars[1], pars.GetRange(2, pars.Count - 2));
-            Debug.WriteLine("Received command: " + msg.CommandName);
+            Global.Log.DebugFormat("Received command: " + msg.CommandName);
             return msg;
         }
 

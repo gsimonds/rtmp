@@ -14,6 +14,7 @@
         private PacketBufferStream dataStream = new PacketBufferStream();
         private RtmpHandshake handshake = new RtmpHandshake();
         private Dictionary<uint, RtmpChunkStream> chunkStreams = new Dictionary<uint, RtmpChunkStream>();
+        private List<int> registeredMessageStreams = new List<int>();
 
         /// <summary>
         /// Output packet queue. We're using List instead of Queue to allow insertion
@@ -93,17 +94,49 @@
                 default:
                     {
                         // any other state means that handshake has been finished
-                        RtmpChunkHeader hdr = RtmpChunkHeader.Decode(this.dataStream);
-
-                        if (hdr != null)
+                        bool canContinue = true;
+                        do
                         {
-                            if (!this.chunkStreams.ContainsKey(hdr.ChunkStreamId))
+                            RtmpChunkHeader hdr = RtmpChunkHeader.Decode(this.dataStream);
+                            // break the loop because of incomplete chunk
+                            if (hdr == null) break;
+
+                            RtmpChunkStream chunkStream = null;
+                            if (this.chunkStreams.ContainsKey(hdr.ChunkStreamId))
                             {
-                                this.chunkStreams.Add(hdr.ChunkStreamId, new RtmpChunkStream(hdr.ChunkStreamId, this.ChunkSize));
+                                chunkStream = this.chunkStreams[hdr.ChunkStreamId];
+                            }
+                            else
+                            {
+                                chunkStream = new RtmpChunkStream(hdr.ChunkStreamId, this.ChunkSize);
+                                this.chunkStreams.Add(hdr.ChunkStreamId, chunkStream);
                             }
 
-                            msg = this.chunkStreams[hdr.ChunkStreamId].Decode(hdr, this.dataStream);
+                            // check if message stream is registered
+                            int messageStreamId = hdr.MessageStreamId;
+                            if (messageStreamId < 0)
+                            {
+                                messageStreamId = chunkStream.MessageStreamId;
+                            }
+
+                            if (!this.registeredMessageStreams.Contains(messageStreamId))
+                            {
+                                // unregistered stream: most certainly we've lost chunk synchronization
+                                // drop everything in current stream (trying to re-align to the next chunk)
+                                Global.Log.ErrorFormat("Received unknown message stream {0}", messageStreamId);
+                                Global.Log.ErrorFormat("Dropping {0} bytes and re-aligning to the next chunk...", dataStream.Length - dataStream.Position + hdr.HeaderSize);
+                                dataStream.Seek(0, System.IO.SeekOrigin.End);
+                                dataStream.TrimBegin();
+                                break;
+                            }
+
+                            canContinue = true;
+                            msg = this.chunkStreams[hdr.ChunkStreamId].Decode(hdr, this.dataStream, ref canContinue);
+
+                            // break the loop if we've parsed complete message or have incomplete chunk
+                            if (msg != null || !canContinue) break;
                         }
+                        while (this.dataStream.Position < this.dataStream.Length);
 
                         break;
                     }
@@ -128,6 +161,35 @@
             else
             {
                 return null;
+            }
+        }
+
+        public void RegisterMessageStream(int messageStreamId)
+        {
+            if (!this.registeredMessageStreams.Contains(messageStreamId))
+            {
+                this.registeredMessageStreams.Add(messageStreamId);
+            }
+        }
+
+        public void UnregisterMessageStream(int messageStreamId)
+        {
+            if (this.registeredMessageStreams.Contains(messageStreamId))
+            {
+                this.registeredMessageStreams.Remove(messageStreamId);
+            }
+        }
+
+        public bool IsMessageStreamRegistered(int messageStreamId)
+        {
+            return this.registeredMessageStreams.Contains(messageStreamId);
+        }
+
+        public void Abort(uint chunkStreamId)
+        {
+            if (this.chunkStreams.ContainsKey(chunkStreamId))
+            {
+                this.chunkStreams[chunkStreamId].Abort();
             }
         }
     }

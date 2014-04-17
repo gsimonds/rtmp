@@ -16,9 +16,12 @@
         SetPeerBandwidth = 0x06,
         Audio = 0x08,
         Video = 0x09,
-        Data = 0x12, // AMF0
-        SharedObject = 0x13, // AMF0
-        Command = 0x14, // AMF0
+        DataAmf3 = 0x0F,
+        CommandAmf3 = 0x11,
+        SharedObjectAmf3 = 0x10,
+        DataAmf0 = 0x12,
+        SharedObjectAmf0 = 0x13,
+        CommandAmf0 = 0x14,
         Aggregate = 0x16,
         Undefined = 0xFF, // for internal use only
     }
