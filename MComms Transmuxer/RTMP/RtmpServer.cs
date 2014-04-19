@@ -11,7 +11,7 @@
     using MComms_Transmuxer.Common;
     using MComms_Transmuxer.Transport;
 
-    class RtmpServer
+    public class RtmpServer
     {
         private SocketTransport transport = null;
         private volatile bool isRunning = false;

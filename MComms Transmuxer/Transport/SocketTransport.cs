@@ -15,7 +15,7 @@
     /// <summary>
     /// General socket transport class. Implements both server and client
     /// </summary>
-    class SocketTransport
+    public class SocketTransport
     {
         #region Constants
 

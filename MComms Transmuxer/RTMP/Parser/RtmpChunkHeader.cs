@@ -8,7 +8,7 @@
 
     using MComms_Transmuxer.Common;
 
-    class RtmpChunkHeader
+    public class RtmpChunkHeader
     {
         public RtmpChunkHeader()
         {

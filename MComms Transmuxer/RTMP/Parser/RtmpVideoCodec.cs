@@ -6,12 +6,13 @@
     using System.Text;
     using System.Threading.Tasks;
 
-    public enum RtmpSessionState
+    public enum RtmpVideoCodec
     {
-        Uninitialized = 0,
-        HanshakeVersionSent,
-        HanshakeAckSent,
-        Receiving,
-        Stopped,
+        FLV1 = 2,
+        ScreenVideo = 3,
+        VP6 = 4,
+        VP6Alpha = 5,
+        ScreenVideo2 = 6,
+        AVC = 7,
     }
 }

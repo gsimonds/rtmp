@@ -6,26 +6,33 @@
     using System.Text;
     using System.Threading.Tasks;
 
-    class Fraction
+    public class Fraction
     {
         public Fraction()
         {
         }
 
-        public Fraction(int num, int den)
+        public Fraction(double num, double den)
         {
             this.Num = num;
             this.Den = den;
         }
 
-        public int Num { get; set; }
+        public double Num { get; set; }
 
-        public int Den { get; set; }
+        public double Den { get; set; }
 
         // conversion from Fraction to double
         public static implicit operator double(Fraction f)
         {
-            return (double)f.Num / f.Den;
+            if (f.Den == 0)
+            {
+                return 0;
+            }
+            else
+            {
+                return (double)f.Num / f.Den;
+            }
         }
     }
 }

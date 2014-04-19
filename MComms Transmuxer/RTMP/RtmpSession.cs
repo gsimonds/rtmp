@@ -4,14 +4,16 @@
     using System.Collections.Generic;
     using System.Linq;
     using System.Net;
+    using System.Runtime.InteropServices;
     using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
 
     using MComms_Transmuxer.Common;
+    using MComms_Transmuxer.SmoothStreaming;
     using MComms_Transmuxer.Transport;
 
-    class RtmpSession : IDisposable
+    public class RtmpSession : IDisposable
     {
         private long sessionId = 0;
         private SocketTransport transport = null;
@@ -29,6 +31,7 @@
         private ulong lastReportedSentSize = 0;
         private uint receiveAckWindowSize = Global.RtmpDefaultAckWindowSize;
         private uint sendAckWindowSize = Global.RtmpDefaultAckWindowSize;
+        private Dictionary<int, RtmpMessageStream> messageStreams = new Dictionary<int, RtmpMessageStream>();
 
         public RtmpSession(long sessionId, SocketTransport transport, IPEndPoint sessionEndPoint)
         {
@@ -37,12 +40,14 @@
             this.sessionEndPoint = sessionEndPoint;
             this.sessionThread = new Thread(this.SessionThread);
             this.sessionThread.Start();
+            Global.Log.DebugFormat("End point {0}, id {1}: created session object", this.sessionEndPoint, this.sessionId);
         }
 
         public void Dispose()
         {
             this.isRunning = false;
             this.sessionThread.Join();
+            Global.Log.DebugFormat("End point {0}, id {1}: session object disposed", this.sessionEndPoint, this.sessionId);
         }
 
         public void OnReceive(PacketBuffer packet)
@@ -56,6 +61,8 @@
 
         private void SessionThread()
         {
+            Global.Log.InfoFormat("End point {0}, id {1}: session thread started...", this.sessionEndPoint, this.sessionId);
+
             while (this.isRunning)
             {
                 PacketBuffer packet = null;
@@ -94,7 +101,7 @@
                         packet = null;
                     }
 
-                    Global.Log.ErrorFormat("End point {0}: exception {1}, dropping session...", this.sessionEndPoint, ex.ToString());
+                    Global.Log.ErrorFormat("Decode exception {0}, dropping session...", ex.ToString());
                     this.transport.Disconnect(this.sessionEndPoint);
                     break;
                 }
@@ -135,6 +142,8 @@
                     Thread.Sleep(1);
                 }
             }
+
+            Global.Log.InfoFormat("End point {0}, id {1}: session thread finished...", this.sessionEndPoint, this.sessionId);
         }
 
         private void ProcessMessage(RtmpMessage msg)
@@ -216,7 +225,7 @@
                     {
                         RtmpMessageSetChunkSize recvCtrl = (RtmpMessageSetChunkSize)msg;
                         this.parser.ChunkSize = (int)recvCtrl.ChunkSize;
-                        Global.Log.DebugFormat("End point {0}: received {1}, new chunk size {2}", this.sessionEndPoint, msg.MessageType, recvCtrl.ChunkSize);
+                        Global.Log.DebugFormat("Received {0}, new chunk size {1}", msg.MessageType, recvCtrl.ChunkSize);
                         break;
                     }
 
@@ -224,7 +233,7 @@
                     {
                         RtmpMessageAbort recvCtrl = (RtmpMessageAbort)msg;
                         this.parser.Abort((uint)recvCtrl.TargetChunkStreamId);
-                        Global.Log.DebugFormat("End point {0}: received {1}, aborted chunk stream {2}", this.sessionEndPoint, msg.MessageType, recvCtrl.TargetChunkStreamId);
+                        Global.Log.DebugFormat("Received {0}, aborted chunk stream {1}", msg.MessageType, recvCtrl.TargetChunkStreamId);
                         break;
                     }
 
@@ -232,7 +241,7 @@
                     {
                         RtmpMessageAck recvCtrl = (RtmpMessageAck)msg;
                         this.lastReportedSentSize = recvCtrl.ReceivedBytes;
-                        Global.Log.DebugFormat("End point {0}: received {1}, reported size {2}, actually sent {3}", this.sessionEndPoint, msg.MessageType, recvCtrl.ReceivedBytes, this.sentSize);
+                        Global.Log.DebugFormat("Received {0}, reported size {1}, actually sent {2}", msg.MessageType, recvCtrl.ReceivedBytes, this.sentSize);
                         // TODO: limit sending???
                         break;
                     }
@@ -243,14 +252,14 @@
                         switch (recvCtrl.EventType)
                         {
                             case RtmpMessageUserControl.EventTypes.SetBufferLength:
-                                Global.Log.DebugFormat("End point {0}: received {1}, event {2}, message stream id {3}, buffer length {4}", this.sessionEndPoint, msg.MessageType, recvCtrl.EventType, recvCtrl.TargetMessageStreamId, recvCtrl.BufferLength);
+                                Global.Log.DebugFormat("Received {0}, event {1}, message stream id {2}, buffer length {3}", msg.MessageType, recvCtrl.EventType, recvCtrl.TargetMessageStreamId, recvCtrl.BufferLength);
                                 break;
                             case RtmpMessageUserControl.EventTypes.PingRequest:
                             case RtmpMessageUserControl.EventTypes.PingResponse:
-                                Global.Log.DebugFormat("End point {0}: received {1}, event {2}, timestamp {3}", this.sessionEndPoint, msg.MessageType, recvCtrl.EventType, recvCtrl.Timestamp);
+                                Global.Log.DebugFormat("Received {0}, event {1}, timestamp {2}", msg.MessageType, recvCtrl.EventType, recvCtrl.PingTimestamp);
                                 break;
                             default:
-                                Global.Log.DebugFormat("End point {0}: received {1}, event {2}, message stream id {3}", this.sessionEndPoint, msg.MessageType, recvCtrl.EventType, recvCtrl.TargetMessageStreamId);
+                                Global.Log.DebugFormat("Received {0}, event {1}, message stream id {2}", msg.MessageType, recvCtrl.EventType, recvCtrl.TargetMessageStreamId);
                                 break;
                         }
                         // TODO: support ping request?
@@ -261,7 +270,7 @@
                     {
                         RtmpMessageWindowAckSize recvCtrl = (RtmpMessageWindowAckSize)msg;
                         this.receiveAckWindowSize = recvCtrl.AckSize;
-                        Global.Log.DebugFormat("End point {0}: received {1}, new recv window size {2}", this.sessionEndPoint, msg.MessageType, recvCtrl.AckSize);
+                        Global.Log.DebugFormat("Received {0}, new recv window size {1}", msg.MessageType, recvCtrl.AckSize);
                         break;
                     }
 
@@ -273,7 +282,7 @@
                             this.sendAckWindowSize = recvCtrl.AckSize;
                             this.parser.Encode(new RtmpMessageWindowAckSize(this.sendAckWindowSize));
                         }
-                        Global.Log.DebugFormat("End point {0}: received {1}, new send window size {2}", this.sessionEndPoint, msg.MessageType, recvCtrl.AckSize);
+                        Global.Log.DebugFormat("Received {0}, new send window size {1}", msg.MessageType, recvCtrl.AckSize);
                         break;
                     }
 
@@ -282,6 +291,7 @@
                         if (this.state != RtmpSessionState.Receiving)
                         {
                             // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
                             this.transport.Disconnect(this.sessionEndPoint);
                             break;
                         }
@@ -305,6 +315,7 @@
                         }
 
                         // prepare reply
+                        Global.Log.DebugFormat("Received command {0}", msg.MessageType);
 
                         // send window acknowledgement size
                         this.parser.Encode(new RtmpMessageWindowAckSize(this.sendAckWindowSize));
@@ -350,11 +361,13 @@
                         if (this.state != RtmpSessionState.Receiving)
                         {
                             // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
                             this.transport.Disconnect(this.sessionEndPoint);
                             break;
                         }
 
                         // TODO: implement
+                        Global.Log.DebugFormat("Received command {0}", msg.MessageType);
                         break;
                     }
 
@@ -363,6 +376,7 @@
                         if (this.state != RtmpSessionState.Receiving)
                         {
                             // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
                             this.transport.Disconnect(this.sessionEndPoint);
                             break;
                         }
@@ -377,6 +391,8 @@
                                 publishStreamName = (string)recvComm.Parameters[1];
                             }
                         }
+
+                        Global.Log.DebugFormat("Received command {0}", msg.MessageType);
 
                         List<object> pars = new List<object>();
 
@@ -403,14 +419,18 @@
                         if (this.state != RtmpSessionState.Receiving)
                         {
                             // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
                             this.transport.Disconnect(this.sessionEndPoint);
                             break;
                         }
 
                         RtmpMessageCommand recvComm = (RtmpMessageCommand)msg;
 
+                        Global.Log.DebugFormat("Received command {0}", msg.MessageType);
+
                         // register new message stream
                         this.parser.RegisterMessageStream(this.messageStreamCounter);
+                        this.messageStreams.Add(this.messageStreamCounter, new RtmpMessageStream(this.messageStreamCounter));
 
                         List<object> pars = new List<object>();
                         pars.Add(new RtmpAmfNull());
@@ -430,7 +450,21 @@
                         if (this.state != RtmpSessionState.Receiving)
                         {
                             // wrong state
-                            Global.Log.ErrorFormat("End point {0}: Command {1}, wrong state {2}, dropping session...", this.sessionEndPoint, msg.MessageType, this.state);
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        RtmpMessageStream messageStream = null;
+                        if (this.messageStreams.ContainsKey(msg.MessageStreamId))
+                        {
+                            messageStream = this.messageStreams[msg.MessageStreamId];
+                        }
+
+                        if (messageStream == null)
+                        {
+                            // wrong publish sequence
+                            Global.Log.ErrorFormat("Command {0}, unregistered message stream {1}, dropping session...", msg.MessageType, msg.MessageStreamId);
                             this.transport.Disconnect(this.sessionEndPoint);
                             break;
                         }
@@ -441,32 +475,27 @@
                             recvComm.Parameters[2].GetType() != typeof(string))
                         {
                             // wrong command parameters
-                            Global.Log.ErrorFormat("End point {0}: Command {1}, corrupted parameters, dropping session...", this.sessionEndPoint, msg.MessageType);
+                            Global.Log.ErrorFormat("Command {0}, corrupted parameters, dropping session...", msg.MessageType);
                             this.transport.Disconnect(this.sessionEndPoint);
                             break;
                         }
 
-                        string publishStreamName = (string)recvComm.Parameters[1];
                         string publishType = (string)recvComm.Parameters[2];
 
                         // accept live streams only
                         if (publishType != "live")
                         {
                             // wrong app
-                            Global.Log.ErrorFormat("End point {0}: Command {1}, unsupported publish type {2}, dropping session...", this.sessionEndPoint, msg.MessageType, publishType);
+                            Global.Log.ErrorFormat("Command {0}, unsupported publish type {1}, dropping session...", msg.MessageType, publishType);
                             this.transport.Disconnect(this.sessionEndPoint);
                             break;
                         }
 
-                        if (!this.parser.IsMessageStreamRegistered(recvComm.MessageStreamId))
-                        {
-                            // wrong publish sequence
-                            Global.Log.ErrorFormat("End point {0}: Command {1}, unregistered message stream {2}, dropping session...", this.sessionEndPoint, msg.MessageType, recvComm.MessageStreamId);
-                            this.transport.Disconnect(this.sessionEndPoint);
-                            break;
-                        }
+                        // TODO: parse publishStreamName: query string, totalDatarate parameter
+                        messageStream.PublishName = (string)recvComm.Parameters[1];
 
                         // prepare reply
+                        Global.Log.DebugFormat("Received command {0}", msg.MessageType);
 
                         // send user control event "Stream N Begins"
                         this.parser.Encode(new RtmpMessageUserControl(RtmpMessageUserControl.EventTypes.StreamBegin, recvComm.MessageStreamId));
@@ -478,7 +507,7 @@
                         RtmpAmfObject amf = new RtmpAmfObject();
                         amf.Strings.Add("level", "status");
                         amf.Strings.Add("code", "NetStream.Publish.Start");
-                        amf.Strings.Add("description", "Publishing " + publishStreamName);
+                        amf.Strings.Add("description", "Publishing " + messageStream.PublishName);
                         amf.Numbers.Add("clientId", this.sessionId);
                         pars.Add(amf);
 
@@ -491,6 +520,301 @@
                         break;
                     }
 
+                case RtmpIntMessageType.Data:
+                    {
+                        if (this.state != RtmpSessionState.Receiving)
+                        {
+                            // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        RtmpMessageStream messageStream = null;
+                        if (this.messageStreams.ContainsKey(msg.MessageStreamId))
+                        {
+                            messageStream = this.messageStreams[msg.MessageStreamId];
+                        }
+
+                        if (messageStream == null)
+                        {
+                            // unexpected message stream
+                            Global.Log.ErrorFormat("Command {0}, unregistered message stream {1}, dropping session...", msg.MessageType, msg.MessageStreamId);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        Global.Log.DebugFormat("Received command {0}", msg.MessageType);
+
+                        RtmpMessageMetadata recvComm = (RtmpMessageMetadata)msg;
+
+                        RtmpAmfObject metadata = null;
+                        if (recvComm.Parameters.Count >= 2)
+                        {
+                            int startIndex = recvComm.Parameters.Count;
+
+                            if ((string)recvComm.Parameters[0] == "@setDataFrame")
+                            {
+                                if (recvComm.Parameters.Count >= 3 && (string)recvComm.Parameters[1] == "onMetaData")
+                                {
+                                    startIndex = 2;
+                                }
+                            }
+                            else if ((string)recvComm.Parameters[0] == "onMetaData")
+                            {
+                                if (recvComm.Parameters[1].GetType() == typeof(RtmpAmfObject))
+                                {
+                                    startIndex = 1;
+                                }
+                            }
+
+                            for (int i = 2; i < recvComm.Parameters.Count; ++i)
+                            {
+                                if (recvComm.Parameters[i].GetType() == typeof(RtmpAmfObject))
+                                {
+                                    metadata = (RtmpAmfObject)recvComm.Parameters[i];
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (metadata != null)
+                        {
+                            MediaType videoMediaType = new MediaType { ContentType = MediaContentType.Video };
+                            MediaType audioMediaType = new MediaType { ContentType = MediaContentType.Audio };
+                            bool videoFound = false;
+                            bool audioFound = false;
+
+                            if (metadata.Numbers.ContainsKey("videocodecid"))
+                            {
+                                videoFound = true;
+                                RtmpVideoCodec videoCodec = (RtmpVideoCodec)(int)metadata.Numbers["videocodecid"];
+                                if (videoCodec != RtmpVideoCodec.AVC)
+                                {
+                                    // unsupported codec
+                                    Global.Log.ErrorFormat("Command {0}, unsupported video codec {1}, dropping session...", msg.MessageType, videoCodec);
+                                    this.transport.Disconnect(this.sessionEndPoint);
+                                    break;
+                                }
+                                videoMediaType.Codec = MediaCodec.H264;
+                            }
+
+                            if (metadata.Numbers.ContainsKey("width"))
+                            {
+                                videoFound = true;
+                                videoMediaType.Width = (int)metadata.Numbers["width"];
+                            }
+
+                            if (metadata.Numbers.ContainsKey("height"))
+                            {
+                                videoFound = true;
+                                videoMediaType.Height = (int)metadata.Numbers["height"];
+                            }
+
+                            if (metadata.Numbers.ContainsKey("videoframerate"))
+                            {
+                                videoFound = true;
+                                videoMediaType.Framerate = new Fraction(metadata.Numbers["videoframerate"], 1.0);
+                            }
+                            else if (metadata.Numbers.ContainsKey("framerate"))
+                            {
+                                videoFound = true;
+                                videoMediaType.Framerate = new Fraction(metadata.Numbers["framerate"], 1.0);
+                            }
+                            else
+                            {
+                                videoMediaType.Framerate = new Fraction();
+                            }
+
+                            if (metadata.Numbers.ContainsKey("videodatarate"))
+                            {
+                                videoFound = true;
+                                videoMediaType.Bitrate = (int)metadata.Numbers["videodatarate"] * 1024;
+                            }
+
+                            if (metadata.Numbers.ContainsKey("audiocodecid"))
+                            {
+                                videoFound = true;
+                                RtmpAudioCodec audioCodec = (RtmpAudioCodec)(int)metadata.Numbers["audiocodecid"];
+                                if (audioCodec != RtmpAudioCodec.AAC)
+                                {
+                                    // unsupported codec
+                                    Global.Log.ErrorFormat("Command {0}, unsupported audio codec {1}, dropping session...", msg.MessageType, audioCodec);
+                                    this.transport.Disconnect(this.sessionEndPoint);
+                                    break;
+                                }
+                                audioMediaType.Codec = MediaCodec.AAC;
+                            }
+
+                            if (metadata.Numbers.ContainsKey("audioonly"))
+                            {
+                                audioFound = true;
+                            }
+
+                            if (metadata.Numbers.ContainsKey("audiodatarate"))
+                            {
+                                audioFound = true;
+                                audioMediaType.Bitrate = (int)metadata.Numbers["audiodatarate"] * 1024;
+                            }
+
+                            if (metadata.Numbers.ContainsKey("audiosamplerate"))
+                            {
+                                audioFound = true;
+                                audioMediaType.SampleRate = (int)metadata.Numbers["audiosamplerate"];
+                            }
+
+                            if (metadata.Numbers.ContainsKey("audiosamplesize"))
+                            {
+                                audioFound = true;
+                                audioMediaType.SampleSize = (int)metadata.Numbers["audiosamplesize"];
+                            }
+
+                            if (metadata.Numbers.ContainsKey("audiochannels"))
+                            {
+                                audioFound = true;
+                                audioMediaType.Channels = (int)metadata.Numbers["audiochannels"];
+                            }
+                            else if (metadata.Booleans.ContainsKey("stereo"))
+                            {
+                                audioFound = true;
+                                audioMediaType.Channels = metadata.Booleans["stereo"] ? 2 : 1;
+                            }
+
+                            if (videoFound)
+                            {
+                                messageStream.VideoMediaType = videoMediaType;
+                            }
+
+                            if (audioFound)
+                            {
+                                messageStream.AudioMediaType = audioMediaType;
+                            }
+                        }
+                        else
+                        {
+                            Global.Log.WarnFormat("Command {0}, metadata format not recognized", msg.MessageType);
+                        }
+
+                        break;
+                    }
+
+                case RtmpIntMessageType.Audio:
+                    {
+                        if (this.state != RtmpSessionState.Receiving)
+                        {
+                            // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        RtmpMessageStream messageStream = null;
+                        if (this.messageStreams.ContainsKey(msg.MessageStreamId))
+                        {
+                            messageStream = this.messageStreams[msg.MessageStreamId];
+                        }
+
+                        if (messageStream == null)
+                        {
+                            // unexpected message stream
+                            Global.Log.ErrorFormat("Command {0}, unregistered message stream {1}, dropping session...", msg.MessageType, msg.MessageStreamId);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        RtmpMessageMedia recvComm = (RtmpMessageMedia)msg;
+
+                        if (recvComm.AudioCodec != RtmpAudioCodec.AAC)
+                        {
+                            // unsupported codec
+                            Global.Log.ErrorFormat("Command {0}, unsupported audio codec {1}, dropping session...", msg.MessageType, recvComm.AudioCodec);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        if (messageStream.FirstAudioFrame)
+                        {
+                            if (messageStream.AudioMediaType == null)
+                            {
+                                messageStream.AudioMediaType = new MediaType { ContentType = MediaContentType.Audio };
+                            }
+
+                            messageStream.AudioMediaType.Codec = MediaCodec.AAC;
+                            messageStream.AudioMediaType.SampleRate = recvComm.SampleRate;
+                            messageStream.AudioMediaType.Channels = recvComm.Channels;
+                            messageStream.AudioMediaType.SampleSize = recvComm.SampleSize;
+                            // first received frame contains codec extra data
+                            messageStream.AudioMediaType.ExtraData = new byte[recvComm.MediaData.ActualBufferSize];
+                            Array.Copy(recvComm.MediaData.Buffer, 1, messageStream.VideoMediaType.ExtraData, 0, recvComm.MediaData.ActualBufferSize - 1);
+
+                            messageStream.FirstAudioFrame = false;
+                        }
+                        else
+                        {
+                            // TODO: push to Smooth Streaming segmenter
+                        }
+
+                        recvComm.MediaData.Release();
+                        break;
+                    }
+
+                case RtmpIntMessageType.Video:
+                    {
+                        if (this.state != RtmpSessionState.Receiving)
+                        {
+                            // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        RtmpMessageStream messageStream = null;
+                        if (this.messageStreams.ContainsKey(msg.MessageStreamId))
+                        {
+                            messageStream = this.messageStreams[msg.MessageStreamId];
+                        }
+
+                        if (messageStream == null)
+                        {
+                            // unexpected message stream
+                            Global.Log.ErrorFormat("Command {0}, unregistered message stream {1}, dropping session...", msg.MessageType, msg.MessageStreamId);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        RtmpMessageMedia recvComm = (RtmpMessageMedia)msg;
+
+                        if (recvComm.VideoCodec != RtmpVideoCodec.AVC)
+                        {
+                            // unsupported codec
+                            Global.Log.ErrorFormat("Command {0}, unsupported video codec {1}, dropping session...", msg.MessageType, recvComm.VideoCodec);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        if (messageStream.FirstVideoFrame)
+                        {
+                            if (messageStream.VideoMediaType == null)
+                            {
+                                messageStream.VideoMediaType = new MediaType { ContentType = MediaContentType.Video };
+                            }
+
+                            messageStream.VideoMediaType.Codec = MediaCodec.H264;
+                            // first received frame contains codec extra data
+                            messageStream.VideoMediaType.ExtraData = new byte[recvComm.MediaData.ActualBufferSize];
+                            Array.Copy(recvComm.MediaData.Buffer, 1, messageStream.VideoMediaType.ExtraData, 0, recvComm.MediaData.ActualBufferSize - 1);
+
+                            messageStream.FirstVideoFrame = false;
+                        }
+                        else
+                        {
+                            // TODO: push to Smooth Streaming segmenter
+                        }
+
+                        recvComm.MediaData.Release();
+                        break;
+                    }
+
                 default:
                     {
                         if (this.state != RtmpSessionState.Receiving)
@@ -500,6 +824,7 @@
                             break;
                         }
 
+                        Global.Log.WarnFormat("Received unsupported message {0}", msg.MessageType);
                         break;
                     }
             }

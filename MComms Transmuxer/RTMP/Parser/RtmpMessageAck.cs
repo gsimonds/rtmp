@@ -8,7 +8,7 @@
 
     using MComms_Transmuxer.Common;
 
-    class RtmpMessageAck : RtmpMessage
+    public class RtmpMessageAck : RtmpMessage
     {
         public RtmpMessageAck(uint receivedBytes)
         {

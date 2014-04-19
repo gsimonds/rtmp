@@ -15,11 +15,11 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
+    <PlatformTarget>x86</PlatformTarget>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>..\Debug\</OutputPath>
     <DefineConstants>TRACE;DEBUG</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -43,12 +43,11 @@
       <HintPath>..\3rdParty\Log4Net\log4net.dll</HintPath>
     </Reference>
     <Reference Include="System" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Xml" />
-    <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
     <Reference Include="System.ServiceProcess" />
     <Reference Include="System.Xml" />
   </ItemGroup>
@@ -76,6 +75,7 @@
     <Compile Include="RTMP\Parser\RtmpAmf0Types.cs" />
     <Compile Include="RTMP\Parser\RtmpAmfNull.cs" />
     <Compile Include="RTMP\Parser\RtmpAmfObject.cs" />
+    <Compile Include="RTMP\Parser\RtmpAudioCodec.cs" />
     <Compile Include="RTMP\Parser\RtmpChunkHeader.cs" />
     <Compile Include="RTMP\Parser\RtmpChunkStream.cs" />
     <Compile Include="RTMP\Parser\RtmpHandshake.cs" />
@@ -83,12 +83,16 @@
     <Compile Include="RTMP\Parser\RtmpMessageAbort.cs" />
     <Compile Include="RTMP\Parser\RtmpMessageAck.cs" />
     <Compile Include="RTMP\Parser\RtmpMessageCommand.cs" />
+    <Compile Include="RTMP\Parser\RtmpMessageMedia.cs" />
+    <Compile Include="RTMP\Parser\RtmpMessageMetadata.cs" />
     <Compile Include="RTMP\Parser\RtmpMessageSetChunkSize.cs" />
     <Compile Include="RTMP\Parser\RtmpMessageSetPeerBandwidth.cs" />
     <Compile Include="RTMP\Parser\RtmpMessageType.cs" />
     <Compile Include="RTMP\Parser\RtmpMessageUserControl.cs" />
     <Compile Include="RTMP\Parser\RtmpMessageWindowAckSize.cs" />
     <Compile Include="RTMP\Parser\RtmpProtocolParser.cs" />
+    <Compile Include="RTMP\Parser\RtmpVideoCodec.cs" />
+    <Compile Include="RTMP\RtmpMessageStream.cs" />
     <Compile Include="RTMP\RtmpServer.cs" />
     <Compile Include="RTMP\RtmpSession.cs" />
     <Compile Include="RTMP\RtmpSessionState.cs" />

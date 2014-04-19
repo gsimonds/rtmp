@@ -6,7 +6,7 @@
     using System.Text;
     using System.Threading.Tasks;
 
-    class RtmpAmfObject
+    public class RtmpAmfObject
     {
         public string CurrentProperty { get; set; }
 

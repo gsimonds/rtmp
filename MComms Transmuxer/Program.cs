@@ -29,6 +29,7 @@
                             {
                                 // TODO: adjust
                                 Global.Allocator = new PacketBufferAllocator(10240, 1024);
+                                Global.MediaAllocator = new PacketBufferAllocator(1024 * 1024, 1024);
                                 RtmpServer server = new RtmpServer();
                                 server.Start();
 

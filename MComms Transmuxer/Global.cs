@@ -19,6 +19,8 @@ namespace MComms_Transmuxer
 
         public static PacketBufferAllocator Allocator { get; set; }
 
+        public static PacketBufferAllocator MediaAllocator { get; set; }
+
         public static readonly log4net.ILog Log = log4net.LogManager.GetLogger(typeof(Program));
     }
 }

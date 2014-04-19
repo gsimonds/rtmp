@@ -8,7 +8,7 @@
 
     using MComms_Transmuxer.Common;
 
-    class RtmpMessageWindowAckSize : RtmpMessage
+    public class RtmpMessageWindowAckSize : RtmpMessage
     {
         public RtmpMessageWindowAckSize(uint ackSize)
         {

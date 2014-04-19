@@ -6,7 +6,7 @@
     using System.Text;
     using System.Threading.Tasks;
 
-    enum MediaCodec
+    public enum MediaCodec
     {
         // video codecs
         H264,

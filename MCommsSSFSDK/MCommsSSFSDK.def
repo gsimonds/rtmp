@@ -1,0 +1,9 @@
+LIBRARY "MCommsSSFSDK"
+
+EXPORTS
+MCSSF_Initialize @1
+MCSSF_AddStream @2
+MCSSF_GetHeader @3
+MCSSF_PushMedia @4
+MCSSF_GetIndex @5
+MCSSF_Uninitialize @6

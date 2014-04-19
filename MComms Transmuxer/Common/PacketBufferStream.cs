@@ -24,12 +24,12 @@
 
         public PacketBufferStream(PacketBuffer packet)
         {
-            this.Insert(packet, 0, packet.ActualBufferSize);
+            this.Append(packet, 0, packet.ActualBufferSize);
         }
 
         public PacketBufferStream(PacketBuffer packet, int offset, int count)
         {
-            this.Insert(packet, offset, count);
+            this.Append(packet, offset, count);
         }
 
         #region Stream implementation
@@ -86,15 +86,10 @@
                     try
                     {
                         this.positionKey = this.position2BufferId.Keys.Where<long>(key => key <= this.position).Max<long>(key => key);
-                        //this.positionKey = this.position2BufferId.Keys.Last<long>(key => key <= this.position);
-                        if (this.positionKey > this.position)
-                        {
-                            int n = 1;
-                        }
                     }
                     catch (Exception ex)
                     {
-                        int n = 1;
+                        Global.Log.Error("Setting this.positionKey exception", ex);
                     }
                 }
                 else
@@ -136,7 +131,6 @@
         {
             int actuallyRead = 0;
 
-            //IEnumerable<long> foundKeys = this.position2BufferId.Keys.Where<long>(key => key >= this.positionKey).OrderBy<long, long>(key => key);
             List<long> foundKeys = new List<long>(this.position2BufferId.Keys.Where<long>(key => key >= this.positionKey).OrderBy<long, long>(key => key));
             foreach (long key in foundKeys)
             {
@@ -170,10 +164,6 @@
             }
 
             this.position += actuallyRead;
-            if (this.positionKey > this.position)
-            {
-                int n = 1;
-            }
             return actuallyRead;
         }
 
@@ -204,7 +194,7 @@
                 }
 
                 int copySize = (int)Math.Min(count - actuallyWritten, packetSize - intPacketOffset);
-                Array.Copy(buffer, actuallyWritten, packet.Buffer, packetOffset + intPacketOffset, copySize);
+                Array.Copy(buffer, offset + actuallyWritten, packet.Buffer, packetOffset + intPacketOffset, copySize);
 
                 actuallyWritten += copySize;
                 if (actuallyWritten == count)
@@ -218,43 +208,89 @@
 
         #endregion
 
-        #region PacketBufferStream specific methods
+        #region PacketBufferStream specific properties and methods
 
-        public void Insert(PacketBuffer buffer, int offset, int count)
+        public bool OneMessageStream { get; set; }
+
+        public PacketBuffer FirstPacketBuffer
         {
-            if (this.position == this.totalLength)
+            get
             {
-                //Global.Log.DebugFormat("Added buffer {0}, size {1}, offset {2}", buffer.Id, count, offset);
-                if (this.totalLength < 0)
+                if (bufferId2Buffer.Count == 0)
                 {
-                    int n = 1;
+                    return null;
                 }
-                this.position2BufferId.Add(this.totalLength, buffer.Id);
-                this.bufferId2Offset.Add(buffer.Id, offset);
-                this.bufferId2Size.Add(buffer.Id, count);
-                this.bufferId2Buffer.Add(buffer.Id, buffer);
-                buffer.AddRef();
-                this.positionKey = this.totalLength;
-                this.totalLength += count;
-            }
-            else
-            {
-                throw new NotImplementedException();
+                else
+                {
+                    return bufferId2Buffer.Values.First<PacketBuffer>();
+                }
             }
         }
 
-        public void CopyTo(PacketBufferStream stream, int count)
+        public void Append(PacketBuffer buffer, int offset, int count)
         {
-            // TODO: implement properly
-            PacketBuffer packet = Global.Allocator.LockBuffer();
-            packet.ActualBufferSize = count;
-            Read(packet.Buffer, 0, count);
-            if (stream.Length > 0)
+            if (this.position != this.totalLength)
             {
-                stream.Seek(0, System.IO.SeekOrigin.End);
+                this.Seek(0, SeekOrigin.End);
             }
-            stream.Insert(packet, 0, count);
-            packet.Release();
+
+            buffer.AddRef();
+
+            this.position2BufferId.Add(this.totalLength, buffer.Id);
+            this.bufferId2Offset.Add(buffer.Id, offset);
+            this.bufferId2Size.Add(buffer.Id, count);
+            this.bufferId2Buffer.Add(buffer.Id, buffer);
+
+            this.positionKey = this.totalLength;
+            this.totalLength += count;
+
+            //Global.Log.DebugFormat("Added buffer {0}, size {1}, offset {2}", buffer.Id, count, offset);
+        }
+
+        /// <summary>
+        /// Copies specified number of bytes from current position to specified stream.
+        /// </summary>
+        /// <param name="stream">Target stream receiving the data</param>
+        /// <param name="count">Number of bytes to copy</param>
+        /// <returns>Number of bytes actually copied</returns>
+        public int CopyTo(PacketBufferStream stream, int count)
+        {
+            int actuallyCopied = 0;
+
+            List<long> foundKeys = new List<long>(this.position2BufferId.Keys.Where<long>(key => key >= this.positionKey).OrderBy<long, long>(key => key));
+            foreach (long key in foundKeys)
+            {
+                // update position key
+                this.positionKey = key;
+                long intPacketOffset = 0;
+                if (this.position > this.positionKey)
+                {
+                    intPacketOffset = this.position - this.positionKey;
+                }
+
+                long bufferId = this.position2BufferId[key];
+                PacketBuffer packet = this.bufferId2Buffer[bufferId];
+                long packetSize = this.bufferId2Size[bufferId];
+                long packetOffset = this.bufferId2Offset[bufferId];
+
+                if (intPacketOffset >= packetSize)
+                {
+                    // nothing to read in current packet
+                    continue;
+                }
+
+                int copySize = (int)Math.Min(count - actuallyCopied, packetSize - intPacketOffset);
+                stream.Write(packet.Buffer, (int)(packetOffset + intPacketOffset), copySize);
+
+                actuallyCopied += copySize;
+                if (actuallyCopied == count)
+                {
+                    break;
+                }
+            }
+
+            this.position += actuallyCopied;
+            return actuallyCopied;
         }
 
         /// <summary>
@@ -273,11 +309,6 @@
 
                 // accumulate removed length
                 removedLength += this.bufferId2Size[bufferId];
-
-                if (removedLength > this.position)
-                {
-                    int n = 1;
-                }
 
                 // release the buffer
                 this.bufferId2Buffer[bufferId].Release();
@@ -299,11 +330,6 @@
                 this.bufferId2Offset[bufferId] += gap;
 
                 this.position2BufferId.Remove(this.positionKey);
-
-                if (this.bufferId2Size[bufferId] < 0)
-                {
-                    int n = 1;
-                }
 
                 if (this.bufferId2Size[bufferId] == 0)
                 {
@@ -336,14 +362,6 @@
             {
                 long bufferId = this.position2BufferId[key];
                 this.position2BufferId.Remove(key);
-                if (key - removedLength < 0)
-                {
-                    int n = 1;
-                }
-                if (this.position2BufferId.ContainsKey(key - removedLength))
-                {
-                    int n = 1;
-                }
                 this.position2BufferId.Add(key - removedLength, bufferId);
             }
 

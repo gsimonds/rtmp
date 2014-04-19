@@ -8,7 +8,7 @@
 
     using MComms_Transmuxer.Common;
 
-    class RtmpMessageSetChunkSize : RtmpMessage
+    public class RtmpMessageSetChunkSize : RtmpMessage
     {
         private uint chunkSize = Global.RtmpDefaultChunkSize;
 

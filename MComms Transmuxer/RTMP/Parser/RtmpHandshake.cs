@@ -8,7 +8,7 @@
 
     using MComms_Transmuxer.Common;
 
-    class RtmpHandshake : RtmpMessage
+    public class RtmpHandshake : RtmpMessage
     {
         public RtmpHandshake()
         {

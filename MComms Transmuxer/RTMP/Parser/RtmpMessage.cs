@@ -9,7 +9,7 @@
 
     using MComms_Transmuxer.Common;
 
-    class RtmpMessage
+    public class RtmpMessage
     {
         public RtmpMessage()
         {
@@ -31,6 +31,7 @@
         public static RtmpMessage Decode(RtmpChunkHeader hdr, PacketBufferStream dataStream)
         {
             RtmpMessage msg = null;
+            long messageStart = dataStream.Position;
 
             switch (hdr.MessageType)
             {
@@ -155,13 +156,45 @@
                         if (hdr.MessageStreamId == 0)
                         {
                             Global.Log.ErrorFormat("Audio data received on wrong message stream {0}", hdr.MessageStreamId);
-                            dataStream.Seek(hdr.MessageLength, System.IO.SeekOrigin.Current);
                             break;
                         }
 
-                        // TODO: implement
-                        Global.Log.DebugFormat("Received audio: {0} bytes, timestamp {1}", hdr.MessageLength, hdr.Timestamp);
-                        dataStream.Seek(hdr.MessageLength, System.IO.SeekOrigin.Current);
+                        byte mediaHeader = (byte)dataStream.ReadByte();
+                        RtmpAudioCodec audioCodec = (RtmpAudioCodec)((mediaHeader & 0xF0) >> 4);
+                        int sampleRate = 8000;
+                        switch ((mediaHeader & 0x0C) >> 2)
+                        {
+                            case 0:
+                                sampleRate = 8000;
+                                break;
+                            case 1:
+                                sampleRate = 11025;
+                                break;
+                            case 2:
+                                sampleRate = 22050;
+                                break;
+                            case 3:
+                                sampleRate = 44100;
+                                break;
+                        }
+                        int sampleSize = ((mediaHeader & 0x02) == 0) ? 8 : 16;
+                        int channels = ((mediaHeader & 0x01) == 0) ? 1 : 2;
+
+                        RtmpMessageMedia msgMedia = new RtmpMessageMedia(audioCodec, sampleRate, sampleSize, channels);
+                        if (dataStream.OneMessageStream)
+                        {
+                            msgMedia.MediaData = dataStream.FirstPacketBuffer;
+                            msgMedia.MediaData.AddRef();
+                        }
+                        else
+                        {
+                            msgMedia.MediaData = Global.MediaAllocator.LockBuffer();
+                            msgMedia.MediaData.ActualBufferSize = hdr.MessageLength;
+                            dataStream.Seek(messageStart, System.IO.SeekOrigin.Begin);
+                            dataStream.Read(msgMedia.MediaData.Buffer, 0, hdr.MessageLength);
+                        }
+
+                        msg = msgMedia;
                         break;
                     }
 
@@ -170,13 +203,28 @@
                         if (hdr.MessageStreamId == 0)
                         {
                             Global.Log.ErrorFormat("Video data received on wrong message stream {0}", hdr.MessageStreamId);
-                            dataStream.Seek(hdr.MessageLength, System.IO.SeekOrigin.Current);
                             break;
                         }
 
-                        // TODO: implement
-                        Global.Log.DebugFormat("Received video: {0} bytes, timestamp {1}", hdr.MessageLength, hdr.Timestamp);
-                        dataStream.Seek(hdr.MessageLength, System.IO.SeekOrigin.Current);
+                        byte mediaHeader = (byte)dataStream.ReadByte();
+                        bool keyFrame = ((mediaHeader & 0xF0) >> 4) == 1;
+                        RtmpVideoCodec videoCodec = (RtmpVideoCodec)(mediaHeader & 0x0F);
+
+                        RtmpMessageMedia msgMedia = new RtmpMessageMedia(videoCodec, keyFrame);
+                        if (dataStream.OneMessageStream)
+                        {
+                            msgMedia.MediaData = dataStream.FirstPacketBuffer;
+                            msgMedia.MediaData.AddRef();
+                        }
+                        else
+                        {
+                            msgMedia.MediaData = Global.MediaAllocator.LockBuffer();
+                            msgMedia.MediaData.ActualBufferSize = hdr.MessageLength;
+                            dataStream.Seek(messageStart, System.IO.SeekOrigin.Begin);
+                            dataStream.Read(msgMedia.MediaData.Buffer, 0, hdr.MessageLength);
+                        }
+
+                        msg = msgMedia;
                         break;
                     }
 
@@ -185,19 +233,16 @@
                         if (hdr.MessageStreamId == 0)
                         {
                             Global.Log.ErrorFormat("Metadata received on wrong message stream {0}", hdr.MessageStreamId);
-                            dataStream.Seek(hdr.MessageLength, System.IO.SeekOrigin.Current);
                             break;
                         }
 
-                        // TODO: implement
-                        Global.Log.DebugFormat("Received metadata: {0} bytes, timestamp {1}", hdr.MessageLength, hdr.Timestamp);
-                        dataStream.Seek(hdr.MessageLength, System.IO.SeekOrigin.Current);
+                        msg = RtmpMessage.DecodeAmf0(hdr, dataStream);
                         break;
                     }
 
                 case RtmpMessageType.CommandAmf0:
                     {
-                        msg = RtmpMessage.DecodeCommand(hdr, dataStream);
+                        msg = RtmpMessage.DecodeAmf0(hdr, dataStream);
                         break;
                     }
 
@@ -205,7 +250,6 @@
                     {
                         Global.Log.WarnFormat("Received unsupported message: type {0}, format {1}, chunk stream {2}, msg stream {3}, timestamp {4}, length {5}",
                             hdr.MessageType, hdr.Format, hdr.ChunkStreamId, hdr.MessageStreamId, hdr.Timestamp, hdr.MessageLength);
-                        dataStream.Seek(hdr.MessageLength, System.IO.SeekOrigin.Current);
                         break;
                     }
             }
@@ -216,11 +260,16 @@
                 msg.MessageStreamId = hdr.MessageStreamId;
                 msg.Timestamp = hdr.Timestamp;
             }
+            else
+            {
+                // if we don't support the message or parsing failed then seek to the end of the message
+                dataStream.Seek(messageStart + hdr.MessageLength, System.IO.SeekOrigin.Begin);
+            }
 
             return msg;
         }
 
-        private static RtmpMessageCommand DecodeCommand(RtmpChunkHeader hdr, PacketBufferStream dataStream)
+        private static RtmpMessage DecodeAmf0(RtmpChunkHeader hdr, PacketBufferStream dataStream)
         {
             List<object> pars = new List<object>();
             long startPosition = dataStream.Position;
@@ -346,21 +395,35 @@
                 }
                 catch (Exception ex)
                 {
-                    // unsupported format
-                    // TODO: log error
-                    dataStream.Seek(startPosition + hdr.MessageLength, System.IO.SeekOrigin.Begin);
+                    Global.Log.ErrorFormat("AMF0 parser failed: {0}", ex.ToString());
                     return null;
                 }
             }
 
-            if (pars.Count < 2 || pars[0].GetType() != typeof(string) || pars[1].GetType() != typeof(double))
+            RtmpMessage msg = null;
+
+            if (hdr.MessageType == RtmpMessageType.CommandAmf0)
             {
-                // TODO: unexpected, log error
-                return null;
+                if (pars.Count < 2 || pars[0].GetType() != typeof(string) || pars[1].GetType() != typeof(double))
+                {
+                    Global.Log.ErrorFormat("Unexpected command parameters: count {0}, par0 type {1}, par1 type {2}",
+                        pars.Count, pars.Count > 0 ? pars[0].GetType().ToString() : "Missing", pars.Count > 1 ? pars[1].GetType().ToString() : "Missing");
+                    return null;
+                }
+
+                msg = new RtmpMessageCommand((string)pars[0], (int)(double)pars[1], pars.GetRange(2, pars.Count - 2));
+            }
+            else if (hdr.MessageType == RtmpMessageType.DataAmf0)
+            {
+                if (pars.Count < 2 || pars[0].GetType() != typeof(string))
+                {
+                    Global.Log.ErrorFormat("Unexpected metadata parameters: count {0}, par0 type {1}", pars.Count, pars.Count > 0 ? pars[0].GetType().ToString() : "Missing");
+                    return null;
+                }
+
+                msg = new RtmpMessageMetadata(pars);
             }
 
-            RtmpMessageCommand msg = new RtmpMessageCommand((string)pars[0], (int)(double)pars[1], pars.GetRange(2, pars.Count - 2));
-            Global.Log.DebugFormat("Received command: " + msg.CommandName);
             return msg;
         }
 

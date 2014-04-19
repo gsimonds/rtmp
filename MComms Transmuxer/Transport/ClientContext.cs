@@ -8,7 +8,7 @@
     using System.Text;
     using System.Threading.Tasks;
 
-    class ClientContext
+    public class ClientContext
     {
         public Socket Socket { get; set; }
         public IPEndPoint RemoteEndPoint { get; set; }

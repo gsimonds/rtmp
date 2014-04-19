@@ -6,7 +6,7 @@
     using System.Text;
     using System.Threading.Tasks;
 
-    enum MediaContentType
+    public enum MediaContentType
     {
         Audio,
         Video,

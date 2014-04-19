@@ -8,7 +8,7 @@
 
     using MComms_Transmuxer.Common;
 
-    class RtmpProtocolParser
+    public class RtmpProtocolParser
     {
         private int chunkSize = Global.RtmpDefaultChunkSize;
         private PacketBufferStream dataStream = new PacketBufferStream();
@@ -58,11 +58,7 @@
             if (dataPacket != null)
             {
                 // if we have the packet then add it to the end of the stream
-                if (this.dataStream.Length > 0)
-                {
-                    this.dataStream.Seek(0, System.IO.SeekOrigin.End);
-                }
-                this.dataStream.Insert(dataPacket, 0, dataPacket.ActualBufferSize);
+                this.dataStream.Append(dataPacket, 0, dataPacket.ActualBufferSize);
                 this.dataStream.Seek(0, System.IO.SeekOrigin.Begin);
             }
 

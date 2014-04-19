@@ -9,7 +9,7 @@
 
     using MComms_Transmuxer.Common;
 
-    class TransportArgs : EventArgs
+    public class TransportArgs : EventArgs
     {
         public TransportArgs(IPEndPoint endPoint) :
             this(endPoint, null)

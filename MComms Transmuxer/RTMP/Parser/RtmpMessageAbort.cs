@@ -8,7 +8,7 @@
 
     using MComms_Transmuxer.Common;
 
-    class RtmpMessageAbort : RtmpMessage
+    public class RtmpMessageAbort : RtmpMessage
     {
         public RtmpMessageAbort(int targetChunkStreamId)
         {

@@ -8,7 +8,7 @@
 
     using MComms_Transmuxer.Common;
 
-    class RtmpMessageCommand : RtmpMessage
+    public class RtmpMessageCommand : RtmpMessage
     {
         public RtmpMessageCommand(string commandName, int transactionId, List<object> parameters)
         {

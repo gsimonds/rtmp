@@ -8,7 +8,7 @@
 
     using MComms_Transmuxer.Common;
 
-    class ClientSendContext : ClientContext
+    public class ClientSendContext : ClientContext
     {
         public ClientSendContext()
         {

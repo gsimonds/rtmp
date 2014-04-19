@@ -8,7 +8,7 @@
 
     using MComms_Transmuxer.Common;
 
-    class RtmpMessageSetPeerBandwidth : RtmpMessage
+    public class RtmpMessageSetPeerBandwidth : RtmpMessage
     {
         public enum LimitTypes : byte
         {

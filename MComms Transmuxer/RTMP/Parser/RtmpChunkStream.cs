@@ -9,7 +9,7 @@
 
     using MComms_Transmuxer.Common;
 
-    class RtmpChunkStream
+    public class RtmpChunkStream
     {
         private uint chunkStreamId;
         private long timestamp = -1;
@@ -17,6 +17,7 @@
         private int messageLength = -1;
         private RtmpMessageType messageType = RtmpMessageType.Undefined;
 
+        private PacketBuffer incompletePacketBuffer = null;
         private PacketBufferStream incompleteMessageStream = null;
         private RtmpChunkHeader incompleteMessageChunkHeader = null;
 
@@ -130,7 +131,10 @@
             {
                 if (this.incompleteMessageStream == null)
                 {
-                    this.incompleteMessageStream = new PacketBufferStream();
+                    this.incompletePacketBuffer = Global.MediaAllocator.LockBuffer();
+                    this.incompletePacketBuffer.ActualBufferSize = this.incompletePacketBuffer.Size;
+                    this.incompleteMessageStream = new PacketBufferStream(this.incompletePacketBuffer);
+                    this.incompleteMessageStream.OneMessageStream = true;
                     this.incompleteMessageChunkHeader = hdr;
 
                     // this is the first chunk of the message, add delta to timestamp if it was specified
@@ -141,7 +145,7 @@
                     }
                 }
 
-                int chunkLength = Math.Min((int)(hdr.MessageLength - this.incompleteMessageStream.Length), this.ChunkSize);
+                int chunkLength = Math.Min((int)(hdr.MessageLength - this.incompleteMessageStream.Position), this.ChunkSize);
                 if (chunkLength > dataStream.Length - dataStream.Position)
                 {
                     // can't continue parsing, need to receive more data
@@ -155,16 +159,18 @@
                 dataStream.CopyTo(this.incompleteMessageStream, chunkLength);
                 dataStream.TrimBegin();
 
-                if (this.incompleteMessageStream.Length >= hdr.MessageLength)
+                if (this.incompleteMessageStream.Position >= hdr.MessageLength)
                 {
                     //Global.Log.DebugFormat("Received message: {0} bytes (last chunk {2}), type {1}", hdr.MessageLength, hdr.MessageType, chunkLength);
 
                     // we've received complete message, parse it
+                    this.incompletePacketBuffer.ActualBufferSize = (int)this.incompleteMessageStream.Position;
                     this.incompleteMessageStream.Seek(0, System.IO.SeekOrigin.Begin);
                     msg = RtmpMessage.Decode(hdr, this.incompleteMessageStream);
 
                     // drop parsed data even if message decoding failed
                     // (which means we don't support something in this message)
+                    this.incompletePacketBuffer.Release();
                     this.incompleteMessageStream.Dispose();
                     this.incompleteMessageStream = null;
                     this.incompleteMessageChunkHeader = null;

@@ -6,7 +6,7 @@
     using System.Text;
     using System.Threading.Tasks;
 
-    class MediaType
+    public class MediaType
     {
         public MediaType()
         {
@@ -37,5 +37,7 @@
         public int SampleRate { get; set; }
 
         public int Channels { get; set; }
+
+        public int SampleSize { get; set; }
     }
 }

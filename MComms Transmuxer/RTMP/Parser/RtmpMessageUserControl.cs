@@ -8,7 +8,7 @@
 
     using MComms_Transmuxer.Common;
 
-    class RtmpMessageUserControl : RtmpMessage
+    public class RtmpMessageUserControl : RtmpMessage
     {
         public enum EventTypes : ushort
         {
@@ -39,7 +39,7 @@
         public RtmpMessageUserControl(EventTypes eventType, uint timestamp)
         {
             this.EventType = eventType;
-            this.Timestamp = timestamp;
+            this.PingTimestamp = timestamp;
             this.MessageType = RtmpIntMessageType.ProtoControlUserControl;
         }
 
@@ -49,7 +49,7 @@
 
         public uint BufferLength { get; set; }
 
-        public uint Timestamp { get; set; }
+        public uint PingTimestamp { get; set; }
 
         public override PacketBuffer ToPacketBuffer()
         {
@@ -65,7 +65,7 @@
             RtmpChunkHeader hdr = new RtmpChunkHeader
             {
                 Format = 0,
-                Timestamp = this.Timestamp,
+                Timestamp = this.PingTimestamp,
                 ChunkStreamId = 2,
                 MessageStreamId = 0,
                 MessageLength = messageLength,
@@ -101,7 +101,7 @@
                     case RtmpMessageUserControl.EventTypes.PingRequest:
                     case RtmpMessageUserControl.EventTypes.PingResponse:
                         {
-                            writer.Write(this.Timestamp);
+                            writer.Write(this.PingTimestamp);
                             break;
                         }
                 }
