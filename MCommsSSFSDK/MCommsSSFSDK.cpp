@@ -59,15 +59,22 @@ int MCOMMS_API MCSSF_Initialize()
         goto done;
     }
 
-    BOOL fVariableBitRate = TRUE;
-    hr = SSFMuxSetOption(hSSFMux, SSF_MUX_OPTION_VARIABLE_RATE, &fVariableBitRate, sizeof(fVariableBitRate));
+    //BOOL fVariableBitRate = TRUE;
+    //hr = SSFMuxSetOption(hSSFMux, SSF_MUX_OPTION_VARIABLE_RATE, &fVariableBitRate, sizeof(fVariableBitRate));
+    //if (FAILED(hr))
+    //{
+    //    goto done;
+    //}
+
+    BOOL fLive = TRUE;
+    hr = SSFMuxSetOption(hSSFMux, SSF_MUX_OPTION_LIVE_MODE, &fLive, sizeof(fLive));
     if (FAILED(hr))
     {
         goto done;
     }
 
-    BOOL fLive = TRUE;
-    hr = SSFMuxSetOption(hSSFMux, SSF_MUX_OPTION_LIVE_MODE, &fLive, sizeof(fLive));
+    BOOL fEnable = TRUE;
+    hr = SSFMuxSetOption(hSSFMux, SSF_MUX_OPTION_ENABLE_STREAM_MANIFEST_BOX_FOR_LIVE_MODE, &fEnable, sizeof(fEnable));
     if (FAILED(hr))
     {
         goto done;
@@ -138,7 +145,9 @@ int MCOMMS_API MCSSF_AddStream(int nMuxId, int nStreamType, int nBitrate, unsign
     }
 
     MPEG2VIDEOINFO* pVih2 = (MPEG2VIDEOINFO*)pStream->pbTypeInfo;
-    BYTE* pExtra = (BYTE*)(pVih2 + 1);
+    BYTE* pExtra = (BYTE*)&pVih2->dwSequenceHeader[0];
+    BYTE* pExtra1 = (BYTE*)(pVih2 + 1);
+    int nSize = SIZE_MPEG2VIDEOINFO(pVih2);
 
     if (pStream->eStreamType == SSF_STREAM_AUDIO)
     {

@@ -2,7 +2,9 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.IO;
     using System.Linq;
+    using System.Net;
     using System.Text;
     using System.Threading.Tasks;
 
@@ -36,5 +38,9 @@
         public int VideoStreamId { get; set; }
 
         public int AudioStreamId { get; set; }
+
+        public HttpWebRequest WebRequest { get; set; }
+
+        public Stream WebRequestStream { get; set; }
     }
 }

@@ -2,6 +2,8 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.IO;
     using System.Linq;
     using System.Net;
     using System.Runtime.InteropServices;
@@ -32,12 +34,14 @@
         private uint receiveAckWindowSize = Global.RtmpDefaultAckWindowSize;
         private uint sendAckWindowSize = Global.RtmpDefaultAckWindowSize;
         private Dictionary<int, RtmpMessageStream> messageStreams = new Dictionary<int, RtmpMessageStream>();
+        private IntPtr mediaDataPtr;
 
         public RtmpSession(long sessionId, SocketTransport transport, IPEndPoint sessionEndPoint)
         {
             this.sessionId = sessionId;
             this.transport = transport;
             this.sessionEndPoint = sessionEndPoint;
+            this.mediaDataPtr = Marshal.AllocHGlobal(Global.MediaAllocator.BufferSize);
             this.sessionThread = new Thread(this.SessionThread);
             this.sessionThread.Start();
             Global.Log.DebugFormat("End point {0}, id {1}: created session object", this.sessionEndPoint, this.sessionId);
@@ -47,6 +51,7 @@
         {
             this.isRunning = false;
             this.sessionThread.Join();
+            Marshal.FreeHGlobal(this.mediaDataPtr);
             Global.Log.DebugFormat("End point {0}, id {1}: session object disposed", this.sessionEndPoint, this.sessionId);
         }
 
@@ -256,7 +261,7 @@
                                 break;
                             case RtmpMessageUserControl.EventTypes.PingRequest:
                             case RtmpMessageUserControl.EventTypes.PingResponse:
-                                Global.Log.DebugFormat("Received {0}, event {1}, timestamp {2}", msg.MessageType, recvCtrl.EventType, recvCtrl.PingTimestamp);
+                                Global.Log.DebugFormat("Received {0}, event {1}, timestamp {2}", msg.MessageType, recvCtrl.EventType, recvCtrl.Timestamp);
                                 break;
                             default:
                                 Global.Log.DebugFormat("Received {0}, event {1}, message stream id {2}", msg.MessageType, recvCtrl.EventType, recvCtrl.TargetMessageStreamId);
@@ -629,7 +634,7 @@
                             if (metadata.Numbers.ContainsKey("videodatarate"))
                             {
                                 videoFound = true;
-                                videoMediaType.Bitrate = (int)metadata.Numbers["videodatarate"] * 1024;
+                                videoMediaType.Bitrate = (int)metadata.Numbers["videodatarate"] * 1000;
                             }
 
                             if (metadata.Numbers.ContainsKey("audiocodecid"))
@@ -654,7 +659,7 @@
                             if (metadata.Numbers.ContainsKey("audiodatarate"))
                             {
                                 audioFound = true;
-                                audioMediaType.Bitrate = (int)metadata.Numbers["audiodatarate"] * 1024;
+                                audioMediaType.Bitrate = (int)metadata.Numbers["audiodatarate"] * 1000;
                             }
 
                             if (metadata.Numbers.ContainsKey("audiosamplerate"))
@@ -745,7 +750,7 @@
                             messageStream.AudioMediaType.SampleSize = recvComm.SampleSize;
                             // first received frame contains codec extra data
                             messageStream.AudioMediaType.ExtraData = new byte[recvComm.MediaData.ActualBufferSize];
-                            Array.Copy(recvComm.MediaData.Buffer, 1, messageStream.VideoMediaType.ExtraData, 0, recvComm.MediaData.ActualBufferSize - 1);
+                            Array.Copy(recvComm.MediaData.Buffer, 1, messageStream.AudioMediaType.ExtraData, 0, recvComm.MediaData.ActualBufferSize - 1);
 
                             messageStream.FirstAudioFrame = false;
                         }
@@ -801,14 +806,171 @@
 
                             messageStream.VideoMediaType.Codec = MediaCodec.H264;
                             // first received frame contains codec extra data
-                            messageStream.VideoMediaType.ExtraData = new byte[recvComm.MediaData.ActualBufferSize];
-                            Array.Copy(recvComm.MediaData.Buffer, 1, messageStream.VideoMediaType.ExtraData, 0, recvComm.MediaData.ActualBufferSize - 1);
+                            int extraDataLen = recvComm.MediaData.ActualBufferSize - 2;
+                            messageStream.VideoMediaType.ExtraData = new byte[extraDataLen];
+                            Array.Copy(recvComm.MediaData.Buffer, recvComm.MediaData.ActualBufferSize - extraDataLen, messageStream.VideoMediaType.ExtraData, 0, extraDataLen);
+                            //messageStream.VideoMediaType.ExtraData[3] = (byte)messageStream.VideoMediaType.ExtraData.Length;
+
+                            StringBuilder sb = new StringBuilder();
+                            for (int i = 0; i < messageStream.VideoMediaType.ExtraData.Length; ++i)
+                            {
+                                sb.AppendFormat("{0:X2}", messageStream.VideoMediaType.ExtraData[i]);
+                            }
+                            Debug.WriteLine("Private data: " + sb.ToString());
+
+                            string hex = "00000001674d401fd94141fb011000003e90000ea600f18325800000000168e933c8";
+                            messageStream.VideoMediaType.ExtraData = Enumerable.Range(0, hex.Length).Where(x => x % 2 == 0).Select(x => Convert.ToByte(hex.Substring(x, 2), 16)).ToArray();
+
+                            // TODO: convert from AnnexB when necessary
+                            // TODO: extract profile and level from metadata if specified
 
                             messageStream.FirstVideoFrame = false;
                         }
                         else
                         {
-                            // TODO: push to Smooth Streaming segmenter
+                            if (messageStream.MuxId == -1)
+                            {
+                                messageStream.MuxId = SmoothStreamingSegmenter.MCSSF_Initialize();
+                            }
+
+                            if (messageStream.VideoStreamId == -1)
+                            {
+                                SmoothStreamingSegmenter.MPEG2VIDEOINFO mvih = new SmoothStreamingSegmenter.MPEG2VIDEOINFO();
+                                mvih.hdr.rcSource = new SmoothStreamingSegmenter.RECT { right = messageStream.VideoMediaType.Width, bottom = messageStream.VideoMediaType.Height };
+                                mvih.hdr.rcTarget = new SmoothStreamingSegmenter.RECT { right = messageStream.VideoMediaType.Width, bottom = messageStream.VideoMediaType.Height };
+                                mvih.hdr.dwBitRate = (uint)messageStream.VideoMediaType.Bitrate;
+                                mvih.hdr.AvgTimePerFrame = 333667; // TODO: set proper
+                                mvih.hdr.dwPictAspectRatioX = (uint)messageStream.VideoMediaType.Width;
+                                mvih.hdr.dwPictAspectRatioY = (uint)messageStream.VideoMediaType.Height;
+
+                                mvih.hdr.bmiHeader.biSize = (uint)Marshal.SizeOf(mvih.hdr.bmiHeader);
+                                mvih.hdr.bmiHeader.biWidth = messageStream.VideoMediaType.Width;
+                                mvih.hdr.bmiHeader.biHeight = messageStream.VideoMediaType.Height;
+                                mvih.hdr.bmiHeader.biPlanes = 1;
+                                mvih.hdr.bmiHeader.biBitCount = 24;
+                                mvih.hdr.bmiHeader.biCompression = 0x31435641; // the only valid value is 'AVC1' as per Microsoft documentation
+                                mvih.hdr.bmiHeader.biSizeImage = (uint)(mvih.hdr.bmiHeader.biWidth * mvih.hdr.bmiHeader.biHeight * mvih.hdr.bmiHeader.biBitCount / 8);
+                                mvih.hdr.bmiHeader.biXPelsPerMeter = 0;
+                                mvih.hdr.bmiHeader.biYPelsPerMeter = 0;
+                                mvih.hdr.bmiHeader.biClrUsed = 0;
+                                mvih.hdr.bmiHeader.biClrImportant = 0;
+
+                                mvih.cbSequenceHeader = (uint)messageStream.VideoMediaType.ExtraData.Length;
+                                mvih.dwProfile = 77;
+                                mvih.dwLevel = 31;
+                                mvih.dwFlags = 4;
+
+                                int totalDataSize = messageStream.VideoMediaType.ExtraData.Length + Marshal.SizeOf(mvih);
+                                Marshal.StructureToPtr(mvih, this.mediaDataPtr, true);
+                                IntPtr extraDataPtr = IntPtr.Add(this.mediaDataPtr, Marshal.SizeOf(mvih) - 4);
+                                Marshal.Copy(messageStream.VideoMediaType.ExtraData, 0, extraDataPtr, messageStream.VideoMediaType.ExtraData.Length);
+
+                                // TODO: initialize first timestamp of segmenter
+                                messageStream.VideoStreamId = SmoothStreamingSegmenter.MCSSF_AddStream(messageStream.MuxId, 2 /* video */, messageStream.VideoMediaType.Bitrate, 0, totalDataSize - 4, this.mediaDataPtr);
+
+                                int headerSize = 0;
+                                IntPtr headerPtr = IntPtr.Zero;
+                                int res = SmoothStreamingSegmenter.MCSSF_GetHeader(messageStream.MuxId, messageStream.VideoStreamId, out headerSize, out headerPtr);
+
+                                PacketBuffer header = Global.MediaAllocator.LockBuffer();
+                                Marshal.Copy(headerPtr, header.Buffer, 0, headerSize);
+                                header.ActualBufferSize = headerSize;
+
+                                StringBuilder sb = new StringBuilder();
+                                for (int i = 0; i < headerSize; ++i)
+                                {
+                                    if (header.Buffer[i] >= 0x20 && header.Buffer[i] <= 0x7F)
+                                    {
+                                        sb.Append((char)header.Buffer[i]);
+                                    }
+                                    else
+                                    {
+                                        sb.Append('.');
+                                    }
+                                }
+                                Debug.WriteLine(sb.ToString());
+
+                                // TODO: create publishing point using REST API for IIS Media Services
+
+                                // TODO: push header to IIS publishing point
+                                if (messageStream.WebRequest == null)
+                                {
+                                    messageStream.WebRequest = (HttpWebRequest)WebRequest.Create("http://192.168.0.101/sspush.isml/Streams(Encoder1)");
+                                    messageStream.WebRequest.Method = "POST";
+                                    messageStream.WebRequest.SendChunked = true;
+                                    messageStream.WebRequest.KeepAlive = true;
+                                    //messageStream.WebRequest.ContentType = "application/x-www-form-urlencoded";
+                                    //messageStream.WebRequest.ContentLength = sendBytes.Length;
+                                    messageStream.WebRequestStream = messageStream.WebRequest.GetRequestStream();
+                                }
+
+                                try
+                                {
+                                    messageStream.WebRequestStream.Write(header.Buffer, 0, header.ActualBufferSize);
+                                    messageStream.WebRequestStream.Flush();
+                                }
+                                catch (Exception ex)
+                                {
+                                    int n = 1;
+                                }
+
+                                header.Release();
+                            }
+
+                            //// convert to annexb
+                            //using (PacketBufferStream stream = new PacketBufferStream(recvComm.MediaData))
+                            //{
+                            //    using (EndianBinaryReader reader = new EndianBinaryReader(stream))
+                            //    {
+                            //        using (EndianBinaryWriter writer = new EndianBinaryWriter(stream))
+                            //        {
+                            //            do
+                            //            {
+                            //                reader.BaseStream.Seek(5, SeekOrigin.Begin);
+                            //                uint nalSize = reader.ReadUInt32();
+                            //                reader.BaseStream.Seek(-4, SeekOrigin.Current);
+                            //                writer.Write((int)1);
+                            //                reader.BaseStream.Seek(nalSize, SeekOrigin.Current);
+                            //            }
+                            //            while (reader.BaseStream.Position < reader.BaseStream.Length);
+                            //        }
+                            //    }
+                            //}
+
+                            Marshal.Copy(recvComm.MediaData.Buffer, 5, mediaDataPtr, recvComm.MediaData.ActualBufferSize - 5);
+                            int outputDataSize = 0;
+                            IntPtr outputDataPtr = IntPtr.Zero;
+                            int pushResult = SmoothStreamingSegmenter.MCSSF_PushMedia(messageStream.MuxId, messageStream.VideoStreamId, recvComm.Timestamp * 10000, 0, recvComm.KeyFrame, recvComm.MediaData.ActualBufferSize - 5, mediaDataPtr, out outputDataSize, out outputDataPtr);
+
+                            if (outputDataSize > 0)
+                            {
+                                // TODO: use allocator
+                                PacketBuffer segment = Global.MediaAllocator.LockBuffer();
+                                Marshal.Copy(outputDataPtr, segment.Buffer, 0, outputDataSize);
+                                try
+                                {
+                                    messageStream.WebRequestStream.Write(segment.Buffer, 0, outputDataSize);
+                                    messageStream.WebRequestStream.Flush();
+                                }
+                                catch (Exception ex)
+                                {
+                                    int n = 1;
+                                }
+                                segment.Release();
+                            }
+                            else
+                            {
+                                if (pushResult == 1)
+                                {
+                                    int n = 1;
+                                }
+                            }
+
+
+                            //res = SmoothStreamingSegmenter.MCSSF_Uninitialize(muxId);
+
+
+
                         }
 
                         recvComm.MediaData.Release();
