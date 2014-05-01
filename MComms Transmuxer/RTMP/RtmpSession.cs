@@ -34,14 +34,12 @@
         private uint receiveAckWindowSize = Global.RtmpDefaultAckWindowSize;
         private uint sendAckWindowSize = Global.RtmpDefaultAckWindowSize;
         private Dictionary<int, RtmpMessageStream> messageStreams = new Dictionary<int, RtmpMessageStream>();
-        private IntPtr mediaDataPtr;
 
         public RtmpSession(long sessionId, SocketTransport transport, IPEndPoint sessionEndPoint)
         {
             this.sessionId = sessionId;
             this.transport = transport;
             this.sessionEndPoint = sessionEndPoint;
-            this.mediaDataPtr = Marshal.AllocHGlobal(Global.MediaAllocator.BufferSize);
             this.sessionThread = new Thread(this.SessionThread);
             this.sessionThread.Start();
             Global.Log.DebugFormat("End point {0}, id {1}: created session object", this.sessionEndPoint, this.sessionId);
@@ -51,7 +49,10 @@
         {
             this.isRunning = false;
             this.sessionThread.Join();
-            Marshal.FreeHGlobal(this.mediaDataPtr);
+            foreach (RtmpMessageStream messageStream in messageStreams.Values)
+            {
+                messageStream.Dispose();
+            }
             Global.Log.DebugFormat("End point {0}, id {1}: session object disposed", this.sessionEndPoint, this.sessionId);
         }
 
@@ -551,218 +552,24 @@
 
                         Global.Log.DebugFormat("Received command {0}", msg.MessageType);
 
-                        RtmpMessageMetadata recvComm = (RtmpMessageMetadata)msg;
-
-                        RtmpAmfObject metadata = null;
-                        if (recvComm.Parameters.Count >= 2)
+                        try
                         {
-                            int startIndex = recvComm.Parameters.Count;
-
-                            if ((string)recvComm.Parameters[0] == "@setDataFrame")
-                            {
-                                if (recvComm.Parameters.Count >= 3 && (string)recvComm.Parameters[1] == "onMetaData")
-                                {
-                                    startIndex = 2;
-                                }
-                            }
-                            else if ((string)recvComm.Parameters[0] == "onMetaData")
-                            {
-                                if (recvComm.Parameters[1].GetType() == typeof(RtmpAmfObject))
-                                {
-                                    startIndex = 1;
-                                }
-                            }
-
-                            for (int i = 2; i < recvComm.Parameters.Count; ++i)
-                            {
-                                if (recvComm.Parameters[i].GetType() == typeof(RtmpAmfObject))
-                                {
-                                    metadata = (RtmpAmfObject)recvComm.Parameters[i];
-                                    break;
-                                }
-                            }
+                            messageStream.ProcessMetadata((RtmpMessageMetadata)msg);
                         }
-
-                        if (metadata != null)
+                        catch (CriticalStreamException unex)
                         {
-                            MediaType videoMediaType = new MediaType { ContentType = MediaContentType.Video };
-                            MediaType audioMediaType = new MediaType { ContentType = MediaContentType.Audio };
-                            bool videoFound = false;
-                            bool audioFound = false;
-
-                            if (metadata.Numbers.ContainsKey("videocodecid"))
-                            {
-                                videoFound = true;
-                                RtmpVideoCodec videoCodec = (RtmpVideoCodec)(int)metadata.Numbers["videocodecid"];
-                                if (videoCodec != RtmpVideoCodec.AVC)
-                                {
-                                    // unsupported codec
-                                    Global.Log.ErrorFormat("Command {0}, unsupported video codec {1}, dropping session...", msg.MessageType, videoCodec);
-                                    this.transport.Disconnect(this.sessionEndPoint);
-                                    break;
-                                }
-                                videoMediaType.Codec = MediaCodec.H264;
-                            }
-
-                            if (metadata.Numbers.ContainsKey("width"))
-                            {
-                                videoFound = true;
-                                videoMediaType.Width = (int)metadata.Numbers["width"];
-                            }
-
-                            if (metadata.Numbers.ContainsKey("height"))
-                            {
-                                videoFound = true;
-                                videoMediaType.Height = (int)metadata.Numbers["height"];
-                            }
-
-                            if (metadata.Numbers.ContainsKey("videoframerate"))
-                            {
-                                videoFound = true;
-                                videoMediaType.Framerate = new Fraction(metadata.Numbers["videoframerate"], 1.0);
-                            }
-                            else if (metadata.Numbers.ContainsKey("framerate"))
-                            {
-                                videoFound = true;
-                                videoMediaType.Framerate = new Fraction(metadata.Numbers["framerate"], 1.0);
-                            }
-                            else
-                            {
-                                videoMediaType.Framerate = new Fraction();
-                            }
-
-                            if (metadata.Numbers.ContainsKey("videodatarate"))
-                            {
-                                videoFound = true;
-                                videoMediaType.Bitrate = (int)metadata.Numbers["videodatarate"] * 1000;
-                            }
-
-                            if (metadata.Numbers.ContainsKey("audiocodecid"))
-                            {
-                                videoFound = true;
-                                RtmpAudioCodec audioCodec = (RtmpAudioCodec)(int)metadata.Numbers["audiocodecid"];
-                                if (audioCodec != RtmpAudioCodec.AAC)
-                                {
-                                    // unsupported codec
-                                    Global.Log.ErrorFormat("Command {0}, unsupported audio codec {1}, dropping session...", msg.MessageType, audioCodec);
-                                    this.transport.Disconnect(this.sessionEndPoint);
-                                    break;
-                                }
-                                audioMediaType.Codec = MediaCodec.AAC;
-                            }
-
-                            if (metadata.Numbers.ContainsKey("audioonly"))
-                            {
-                                audioFound = true;
-                            }
-
-                            if (metadata.Numbers.ContainsKey("audiodatarate"))
-                            {
-                                audioFound = true;
-                                audioMediaType.Bitrate = (int)metadata.Numbers["audiodatarate"] * 1000;
-                            }
-
-                            if (metadata.Numbers.ContainsKey("audiosamplerate"))
-                            {
-                                audioFound = true;
-                                audioMediaType.SampleRate = (int)metadata.Numbers["audiosamplerate"];
-                            }
-
-                            if (metadata.Numbers.ContainsKey("audiosamplesize"))
-                            {
-                                audioFound = true;
-                                audioMediaType.SampleSize = (int)metadata.Numbers["audiosamplesize"];
-                            }
-
-                            if (metadata.Numbers.ContainsKey("audiochannels"))
-                            {
-                                audioFound = true;
-                                audioMediaType.Channels = (int)metadata.Numbers["audiochannels"];
-                            }
-                            else if (metadata.Booleans.ContainsKey("stereo"))
-                            {
-                                audioFound = true;
-                                audioMediaType.Channels = metadata.Booleans["stereo"] ? 2 : 1;
-                            }
-
-                            if (videoFound)
-                            {
-                                messageStream.VideoMediaType = videoMediaType;
-                            }
-
-                            if (audioFound)
-                            {
-                                messageStream.AudioMediaType = audioMediaType;
-                            }
+                            Global.Log.Error(unex.Message);
+                            this.transport.Disconnect(this.sessionEndPoint);
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            Global.Log.WarnFormat("Command {0}, metadata format not recognized", msg.MessageType);
+                            Global.Log.ErrorFormat("Failed to process metadata: {0}", ex.ToString());
                         }
 
                         break;
                     }
 
                 case RtmpIntMessageType.Audio:
-                    {
-                        if (this.state != RtmpSessionState.Receiving)
-                        {
-                            // wrong state
-                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
-                            this.transport.Disconnect(this.sessionEndPoint);
-                            break;
-                        }
-
-                        RtmpMessageStream messageStream = null;
-                        if (this.messageStreams.ContainsKey(msg.MessageStreamId))
-                        {
-                            messageStream = this.messageStreams[msg.MessageStreamId];
-                        }
-
-                        if (messageStream == null)
-                        {
-                            // unexpected message stream
-                            Global.Log.ErrorFormat("Command {0}, unregistered message stream {1}, dropping session...", msg.MessageType, msg.MessageStreamId);
-                            this.transport.Disconnect(this.sessionEndPoint);
-                            break;
-                        }
-
-                        RtmpMessageMedia recvComm = (RtmpMessageMedia)msg;
-
-                        if (recvComm.AudioCodec != RtmpAudioCodec.AAC)
-                        {
-                            // unsupported codec
-                            Global.Log.ErrorFormat("Command {0}, unsupported audio codec {1}, dropping session...", msg.MessageType, recvComm.AudioCodec);
-                            this.transport.Disconnect(this.sessionEndPoint);
-                            break;
-                        }
-
-                        if (messageStream.FirstAudioFrame)
-                        {
-                            if (messageStream.AudioMediaType == null)
-                            {
-                                messageStream.AudioMediaType = new MediaType { ContentType = MediaContentType.Audio };
-                            }
-
-                            messageStream.AudioMediaType.Codec = MediaCodec.AAC;
-                            messageStream.AudioMediaType.SampleRate = recvComm.SampleRate;
-                            messageStream.AudioMediaType.Channels = recvComm.Channels;
-                            messageStream.AudioMediaType.SampleSize = recvComm.SampleSize;
-                            // first received frame contains codec extra data
-                            messageStream.AudioMediaType.ExtraData = new byte[recvComm.MediaData.ActualBufferSize];
-                            Array.Copy(recvComm.MediaData.Buffer, 1, messageStream.AudioMediaType.ExtraData, 0, recvComm.MediaData.ActualBufferSize - 1);
-
-                            messageStream.FirstAudioFrame = false;
-                        }
-                        else
-                        {
-                            // TODO: push to Smooth Streaming segmenter
-                        }
-
-                        recvComm.MediaData.Release();
-                        break;
-                    }
-
                 case RtmpIntMessageType.Video:
                     {
                         if (this.state != RtmpSessionState.Receiving)
@@ -787,193 +594,22 @@
                             break;
                         }
 
-                        RtmpMessageMedia recvComm = (RtmpMessageMedia)msg;
-
-                        if (recvComm.VideoCodec != RtmpVideoCodec.AVC)
+                        try
                         {
-                            // unsupported codec
-                            Global.Log.ErrorFormat("Command {0}, unsupported video codec {1}, dropping session...", msg.MessageType, recvComm.VideoCodec);
+                            messageStream.ProcessMediaData((RtmpMessageMedia)msg);
+                        }
+                        catch (CriticalStreamException unex)
+                        {
+                            Global.Log.Error(unex.Message);
                             this.transport.Disconnect(this.sessionEndPoint);
-                            break;
                         }
-
-                        if (messageStream.FirstVideoFrame)
+                        catch (Exception ex)
                         {
-                            if (messageStream.VideoMediaType == null)
-                            {
-                                messageStream.VideoMediaType = new MediaType { ContentType = MediaContentType.Video };
-                            }
-
-                            messageStream.VideoMediaType.Codec = MediaCodec.H264;
-                            // first received frame contains codec extra data
-                            int extraDataLen = recvComm.MediaData.ActualBufferSize - 2;
-                            messageStream.VideoMediaType.ExtraData = new byte[extraDataLen];
-                            Array.Copy(recvComm.MediaData.Buffer, recvComm.MediaData.ActualBufferSize - extraDataLen, messageStream.VideoMediaType.ExtraData, 0, extraDataLen);
-                            //messageStream.VideoMediaType.ExtraData[3] = (byte)messageStream.VideoMediaType.ExtraData.Length;
-
-                            StringBuilder sb = new StringBuilder();
-                            for (int i = 0; i < messageStream.VideoMediaType.ExtraData.Length; ++i)
-                            {
-                                sb.AppendFormat("{0:X2}", messageStream.VideoMediaType.ExtraData[i]);
-                            }
-                            Debug.WriteLine("Private data: " + sb.ToString());
-
-                            string hex = "00000001674d401fd94141fb011000003e90000ea600f18325800000000168e933c8";
-                            messageStream.VideoMediaType.ExtraData = Enumerable.Range(0, hex.Length).Where(x => x % 2 == 0).Select(x => Convert.ToByte(hex.Substring(x, 2), 16)).ToArray();
-
-                            // TODO: convert from AnnexB when necessary
-                            // TODO: extract profile and level from metadata if specified
-
-                            messageStream.FirstVideoFrame = false;
-                        }
-                        else
-                        {
-                            if (messageStream.MuxId == -1)
-                            {
-                                messageStream.MuxId = SmoothStreamingSegmenter.MCSSF_Initialize();
-                            }
-
-                            if (messageStream.VideoStreamId == -1)
-                            {
-                                SmoothStreamingSegmenter.MPEG2VIDEOINFO mvih = new SmoothStreamingSegmenter.MPEG2VIDEOINFO();
-                                mvih.hdr.rcSource = new SmoothStreamingSegmenter.RECT { right = messageStream.VideoMediaType.Width, bottom = messageStream.VideoMediaType.Height };
-                                mvih.hdr.rcTarget = new SmoothStreamingSegmenter.RECT { right = messageStream.VideoMediaType.Width, bottom = messageStream.VideoMediaType.Height };
-                                mvih.hdr.dwBitRate = (uint)messageStream.VideoMediaType.Bitrate;
-                                mvih.hdr.AvgTimePerFrame = 333667; // TODO: set proper
-                                mvih.hdr.dwPictAspectRatioX = (uint)messageStream.VideoMediaType.Width;
-                                mvih.hdr.dwPictAspectRatioY = (uint)messageStream.VideoMediaType.Height;
-
-                                mvih.hdr.bmiHeader.biSize = (uint)Marshal.SizeOf(mvih.hdr.bmiHeader);
-                                mvih.hdr.bmiHeader.biWidth = messageStream.VideoMediaType.Width;
-                                mvih.hdr.bmiHeader.biHeight = messageStream.VideoMediaType.Height;
-                                mvih.hdr.bmiHeader.biPlanes = 1;
-                                mvih.hdr.bmiHeader.biBitCount = 24;
-                                mvih.hdr.bmiHeader.biCompression = 0x31435641; // the only valid value is 'AVC1' as per Microsoft documentation
-                                mvih.hdr.bmiHeader.biSizeImage = (uint)(mvih.hdr.bmiHeader.biWidth * mvih.hdr.bmiHeader.biHeight * mvih.hdr.bmiHeader.biBitCount / 8);
-                                mvih.hdr.bmiHeader.biXPelsPerMeter = 0;
-                                mvih.hdr.bmiHeader.biYPelsPerMeter = 0;
-                                mvih.hdr.bmiHeader.biClrUsed = 0;
-                                mvih.hdr.bmiHeader.biClrImportant = 0;
-
-                                mvih.cbSequenceHeader = (uint)messageStream.VideoMediaType.ExtraData.Length;
-                                mvih.dwProfile = 77;
-                                mvih.dwLevel = 31;
-                                mvih.dwFlags = 4;
-
-                                int totalDataSize = messageStream.VideoMediaType.ExtraData.Length + Marshal.SizeOf(mvih);
-                                Marshal.StructureToPtr(mvih, this.mediaDataPtr, true);
-                                IntPtr extraDataPtr = IntPtr.Add(this.mediaDataPtr, Marshal.SizeOf(mvih) - 4);
-                                Marshal.Copy(messageStream.VideoMediaType.ExtraData, 0, extraDataPtr, messageStream.VideoMediaType.ExtraData.Length);
-
-                                // TODO: initialize first timestamp of segmenter
-                                messageStream.VideoStreamId = SmoothStreamingSegmenter.MCSSF_AddStream(messageStream.MuxId, 2 /* video */, messageStream.VideoMediaType.Bitrate, 0, totalDataSize - 4, this.mediaDataPtr);
-
-                                int headerSize = 0;
-                                IntPtr headerPtr = IntPtr.Zero;
-                                int res = SmoothStreamingSegmenter.MCSSF_GetHeader(messageStream.MuxId, messageStream.VideoStreamId, out headerSize, out headerPtr);
-
-                                PacketBuffer header = Global.MediaAllocator.LockBuffer();
-                                Marshal.Copy(headerPtr, header.Buffer, 0, headerSize);
-                                header.ActualBufferSize = headerSize;
-
-                                StringBuilder sb = new StringBuilder();
-                                for (int i = 0; i < headerSize; ++i)
-                                {
-                                    if (header.Buffer[i] >= 0x20 && header.Buffer[i] <= 0x7F)
-                                    {
-                                        sb.Append((char)header.Buffer[i]);
-                                    }
-                                    else
-                                    {
-                                        sb.Append('.');
-                                    }
-                                }
-                                Debug.WriteLine(sb.ToString());
-
-                                // TODO: create publishing point using REST API for IIS Media Services
-
-                                // TODO: push header to IIS publishing point
-                                if (messageStream.WebRequest == null)
-                                {
-                                    messageStream.WebRequest = (HttpWebRequest)WebRequest.Create("http://192.168.0.101/sspush.isml/Streams(Encoder1)");
-                                    messageStream.WebRequest.Method = "POST";
-                                    messageStream.WebRequest.SendChunked = true;
-                                    messageStream.WebRequest.KeepAlive = true;
-                                    //messageStream.WebRequest.ContentType = "application/x-www-form-urlencoded";
-                                    //messageStream.WebRequest.ContentLength = sendBytes.Length;
-                                    messageStream.WebRequestStream = messageStream.WebRequest.GetRequestStream();
-                                }
-
-                                try
-                                {
-                                    messageStream.WebRequestStream.Write(header.Buffer, 0, header.ActualBufferSize);
-                                    messageStream.WebRequestStream.Flush();
-                                }
-                                catch (Exception ex)
-                                {
-                                    int n = 1;
-                                }
-
-                                header.Release();
-                            }
-
-                            //// convert to annexb
-                            //using (PacketBufferStream stream = new PacketBufferStream(recvComm.MediaData))
-                            //{
-                            //    using (EndianBinaryReader reader = new EndianBinaryReader(stream))
-                            //    {
-                            //        using (EndianBinaryWriter writer = new EndianBinaryWriter(stream))
-                            //        {
-                            //            do
-                            //            {
-                            //                reader.BaseStream.Seek(5, SeekOrigin.Begin);
-                            //                uint nalSize = reader.ReadUInt32();
-                            //                reader.BaseStream.Seek(-4, SeekOrigin.Current);
-                            //                writer.Write((int)1);
-                            //                reader.BaseStream.Seek(nalSize, SeekOrigin.Current);
-                            //            }
-                            //            while (reader.BaseStream.Position < reader.BaseStream.Length);
-                            //        }
-                            //    }
-                            //}
-
-                            Marshal.Copy(recvComm.MediaData.Buffer, 5, mediaDataPtr, recvComm.MediaData.ActualBufferSize - 5);
-                            int outputDataSize = 0;
-                            IntPtr outputDataPtr = IntPtr.Zero;
-                            int pushResult = SmoothStreamingSegmenter.MCSSF_PushMedia(messageStream.MuxId, messageStream.VideoStreamId, recvComm.Timestamp * 10000, 0, recvComm.KeyFrame, recvComm.MediaData.ActualBufferSize - 5, mediaDataPtr, out outputDataSize, out outputDataPtr);
-
-                            if (outputDataSize > 0)
-                            {
-                                // TODO: use allocator
-                                PacketBuffer segment = Global.MediaAllocator.LockBuffer();
-                                Marshal.Copy(outputDataPtr, segment.Buffer, 0, outputDataSize);
-                                try
-                                {
-                                    messageStream.WebRequestStream.Write(segment.Buffer, 0, outputDataSize);
-                                    messageStream.WebRequestStream.Flush();
-                                }
-                                catch (Exception ex)
-                                {
-                                    int n = 1;
-                                }
-                                segment.Release();
-                            }
-                            else
-                            {
-                                if (pushResult == 1)
-                                {
-                                    int n = 1;
-                                }
-                            }
-
-
-                            //res = SmoothStreamingSegmenter.MCSSF_Uninitialize(muxId);
-
-
-
+                            Global.Log.ErrorFormat("Failed to process media data: {0}", ex.ToString());
                         }
 
-                        recvComm.MediaData.Release();
+                        ((RtmpMessageMedia)msg).MediaData.Release();
+
                         break;
                     }
 
@@ -991,7 +627,5 @@
                     }
             }
         }
-
-        // other public properties/methods TBD
     }
 }

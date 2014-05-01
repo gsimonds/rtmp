@@ -17,6 +17,8 @@ namespace MComms_Transmuxer
         public const int RtmpDefaultChunkSize = 128;
         public const int RtmpDefaultAckWindowSize = 2500000;
 
+        public const long SmoothStreamingTimescale = 10000000;
+
         public static PacketBufferAllocator Allocator { get; set; }
 
         public static PacketBufferAllocator MediaAllocator { get; set; }

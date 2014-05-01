@@ -144,10 +144,12 @@ int MCOMMS_API MCSSF_AddStream(int nMuxId, int nStreamType, int nBitrate, unsign
         memcpy(pStream->pbTypeInfo, pExtraData, nExtraDataSize);
     }
 
-    MPEG2VIDEOINFO* pVih2 = (MPEG2VIDEOINFO*)pStream->pbTypeInfo;
-    BYTE* pExtra = (BYTE*)&pVih2->dwSequenceHeader[0];
-    BYTE* pExtra1 = (BYTE*)(pVih2 + 1);
-    int nSize = SIZE_MPEG2VIDEOINFO(pVih2);
+    //MPEG2VIDEOINFO* pVih2 = (MPEG2VIDEOINFO*)pStream->pbTypeInfo;
+    //BYTE* pExtra = (BYTE*)&pVih2->dwSequenceHeader[0];
+    //BYTE* pExtra1 = (BYTE*)(pVih2 + 1);
+    //int nSize = SIZE_MPEG2VIDEOINFO(pVih2);
+    WAVEFORMATEX* pWfx = (WAVEFORMATEX*)pStream->pbTypeInfo;
+    BYTE* pExtra = (BYTE*)(pWfx + 1);
 
     if (pStream->eStreamType == SSF_STREAM_AUDIO)
     {

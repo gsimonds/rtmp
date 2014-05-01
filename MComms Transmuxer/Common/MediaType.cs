@@ -20,7 +20,7 @@
 
         public int Bitrate { get; set; }
 
-        public byte[] ExtraData { get; set; }
+        public byte[] PrivateData { get; set; }
 
         // video specific properties
 
