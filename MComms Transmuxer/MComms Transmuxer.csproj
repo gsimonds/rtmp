@@ -79,6 +79,7 @@
     <Compile Include="RTMP\Parser\RtmpChunkHeader.cs" />
     <Compile Include="RTMP\Parser\RtmpChunkStream.cs" />
     <Compile Include="RTMP\Parser\RtmpHandshake.cs" />
+    <Compile Include="RTMP\Parser\RtmpMediaPacketType.cs" />
     <Compile Include="RTMP\Parser\RtmpMessage.cs" />
     <Compile Include="RTMP\Parser\RtmpMessageAbort.cs" />
     <Compile Include="RTMP\Parser\RtmpMessageAck.cs" />

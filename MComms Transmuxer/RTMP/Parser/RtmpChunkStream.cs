@@ -73,7 +73,28 @@
             bool bValid = false;
             if (hdr.Timestamp >= 0 && hdr.MessageLength >= 0 && hdr.MessageType != RtmpMessageType.Undefined)
             {
-                bValid = true;
+                // check if size is reasonable
+                switch (hdr.MessageType)
+                {
+                    case RtmpMessageType.Video:
+                        if (hdr.MessageLength < 10 * 1024 * 1024)
+                        {
+                            bValid = true;
+                        }
+                        break;
+                    case RtmpMessageType.Audio:
+                        if (hdr.MessageLength < 1024 * 1024)
+                        {
+                            bValid = true;
+                        }
+                        break;
+                    default:
+                        if (hdr.MessageLength < 10240)
+                        {
+                            bValid = true;
+                        }
+                        break;
+                }
             }
 
             if (!bValid)
@@ -131,6 +152,12 @@
             {
                 if (this.incompleteMessageStream == null)
                 {
+                    if (hdr.MessageLength > Global.MediaAllocator.BufferSize)
+                    {
+                        // increase buffer sizes
+                        Global.MediaAllocator.Reallocate(hdr.MessageLength * 3 / 2, Global.MediaAllocator.BufferCount);
+                    }
+
                     this.incompletePacketBuffer = Global.MediaAllocator.LockBuffer();
                     this.incompletePacketBuffer.ActualBufferSize = this.incompletePacketBuffer.Size;
                     this.incompleteMessageStream = new PacketBufferStream(this.incompletePacketBuffer);

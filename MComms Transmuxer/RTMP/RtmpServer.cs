@@ -34,7 +34,9 @@
             this.transport.Sent += Transport_Sent;
 #endif
 
-            // TODO: adjust transport parameters
+            this.transport.MaxConnections = Global.RtmpMaxConnections;
+            this.transport.ReceiveBufferSize = Global.TransportBufferSize;
+            this.transport.SendBufferSize = Global.TransportBufferSize;
 
             this.controlThread = new Thread(this.ControlThreadProc);
         }
@@ -61,7 +63,7 @@
 
             while (this.isRunning)
             {
-                // TODO: implement general server control logic
+                // TODO: do we need this thread?
                 Thread.Sleep(1);
             }
         }
@@ -73,6 +75,7 @@
                 if (sessions.ContainsKey(e.EndPoint))
                 {
                     // session exists already, skipping it
+                    Global.Log.DebugFormat("Session {0} exists already", e.EndPoint);
                     return;
                 }
 
@@ -88,6 +91,7 @@
                 if (!sessions.ContainsKey(e.EndPoint))
                 {
                     // session doens't exist, skipping it
+                    Global.Log.DebugFormat("Session {0} doesn't exist", e.EndPoint);
                     return;
                 }
 
@@ -103,6 +107,7 @@
                 if (!sessions.ContainsKey(e.EndPoint))
                 {
                     // out of bound message, skipping it
+                    Global.Log.DebugFormat("Out of bound message received from {0}, size {1}", e.EndPoint, e.Packet.ActualBufferSize);
                     return;
                 }
 
@@ -117,13 +122,10 @@
                 if (!sessions.ContainsKey(e.EndPoint))
                 {
                     // out of bound message, skipping it
+                    Global.Log.DebugFormat("Out of bound message sent to {0}, size {1}", e.EndPoint, e.Packet.ActualBufferSize);
                     return;
                 }
-
-                // TODO: log
             }
         }
-
-        // other public properties/methods TBD
     }
 }

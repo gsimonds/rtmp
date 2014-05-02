@@ -52,6 +52,8 @@
         CommandNetConnectionFCPublish,
         CommandNetConnectionOnFCPublish,
         CommandNetConnectionFCUnpublish,
+        CommandNetConnectionOnFCUnpublish,
+        CommandNetStreamCloseStream,
         CommandNetStreamDeleteStream,
         CommandNetStreamPublish,
         CommandNetStreamOnStatus,

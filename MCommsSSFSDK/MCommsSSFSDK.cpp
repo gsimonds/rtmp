@@ -27,6 +27,7 @@ struct StreamContext
     REFERENCE_TIME rtChunkStartTime;
     REFERENCE_TIME rtChunkCurrentTime;
     REFERENCE_TIME rtChunkDuration;
+    REFERENCE_TIME rtFirstTimestamp;
 };
 
 struct MuxContext
@@ -136,6 +137,8 @@ int MCOMMS_API MCSSF_AddStream(int nMuxId, int nStreamType, int nBitrate, unsign
 
     pStream->eStreamType = (SSF_STREAM_TYPE)nStreamType;
     pStream->nBitrate = nBitrate;
+    pStream->rtChunkStartTime = -1;
+    pStream->rtFirstTimestamp = -1;
     pStream->wLanguage = nLanguage;
     if (nExtraDataSize > 0)
     {
@@ -143,13 +146,6 @@ int MCOMMS_API MCSSF_AddStream(int nMuxId, int nStreamType, int nBitrate, unsign
         pStream->pbTypeInfo = new BYTE[nExtraDataSize];
         memcpy(pStream->pbTypeInfo, pExtraData, nExtraDataSize);
     }
-
-    //MPEG2VIDEOINFO* pVih2 = (MPEG2VIDEOINFO*)pStream->pbTypeInfo;
-    //BYTE* pExtra = (BYTE*)&pVih2->dwSequenceHeader[0];
-    //BYTE* pExtra1 = (BYTE*)(pVih2 + 1);
-    //int nSize = SIZE_MPEG2VIDEOINFO(pVih2);
-    WAVEFORMATEX* pWfx = (WAVEFORMATEX*)pStream->pbTypeInfo;
-    BYTE* pExtra = (BYTE*)(pWfx + 1);
 
     if (pStream->eStreamType == SSF_STREAM_AUDIO)
     {
@@ -252,11 +248,16 @@ int MCOMMS_API MCSSF_PushMedia(int nMuxId, int nStreamId, LONGLONG nStartTime, L
 
     StreamContext* pStream = i_s->second;
 
+    if (pStream->rtFirstTimestamp < 0)
+    {
+        pStream->rtFirstTimestamp = nStartTime;
+    }
+
     pStream->rtChunkCurrentTime = nStartTime;
     HRESULT hr;
     int nResult = 0;
 
-    if (bIsKeyFrame && (pStream->rtChunkCurrentTime - pStream->rtChunkStartTime >= pStream->rtChunkDuration))
+    if (bIsKeyFrame && pStream->fChunkInProgress && (pStream->rtChunkStartTime >= 0) && (pStream->rtChunkCurrentTime - pStream->rtChunkStartTime >= pStream->rtChunkDuration))
     {
         hr = SSFMuxAdjustDuration(pMux->hSSFMux, pStream->dwStreamIndex, nStartTime);
         if (FAILED(hr))
@@ -280,7 +281,7 @@ int MCOMMS_API MCSSF_PushMedia(int nMuxId, int nStreamId, LONGLONG nStartTime, L
     }
 
     SSF_SAMPLE inputSample = { 0 };
-    inputSample.qwSampleStartTime = (UINT64)nStartTime;
+    inputSample.qwSampleStartTime = (UINT64)(nStartTime);
     inputSample.pSampleData = pSampleData;
     inputSample.cbSampleData = nSampleDataSize;
     inputSample.flags = SSF_SAMPLE_FLAG_START_TIME;

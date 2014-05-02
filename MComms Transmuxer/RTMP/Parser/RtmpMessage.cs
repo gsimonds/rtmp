@@ -180,7 +180,9 @@
                         int sampleSize = ((mediaHeader & 0x02) == 0) ? 8 : 16;
                         int channels = ((mediaHeader & 0x01) == 0) ? 1 : 2;
 
-                        RtmpMessageMedia msgMedia = new RtmpMessageMedia(audioCodec, sampleRate, sampleSize, channels);
+                        RtmpMediaPacketType packetType = (RtmpMediaPacketType)dataStream.ReadByte();
+
+                        RtmpMessageMedia msgMedia = new RtmpMessageMedia(audioCodec, packetType, sampleRate, sampleSize, channels);
                         if (dataStream.OneMessageStream)
                         {
                             msgMedia.MediaData = dataStream.FirstPacketBuffer;
@@ -210,7 +212,15 @@
                         bool keyFrame = ((mediaHeader & 0xF0) >> 4) == 1;
                         RtmpVideoCodec videoCodec = (RtmpVideoCodec)(mediaHeader & 0x0F);
 
-                        RtmpMessageMedia msgMedia = new RtmpMessageMedia(videoCodec, keyFrame);
+                        RtmpMediaPacketType packetType = (RtmpMediaPacketType)dataStream.ReadByte();
+
+                        int decoderDelay = 0;
+                        using (EndianBinaryReader reader = new EndianBinaryReader(dataStream, true))
+                        {
+                            decoderDelay = reader.ReadInt32(3);
+                        }
+
+                        RtmpMessageMedia msgMedia = new RtmpMessageMedia(videoCodec, packetType, decoderDelay, keyFrame);
                         if (dataStream.OneMessageStream)
                         {
                             msgMedia.MediaData = dataStream.FirstPacketBuffer;

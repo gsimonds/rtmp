@@ -19,6 +19,11 @@
         static void Main(string[] args)
         {
             Global.Log.Info("Starting MComms Transmuxer...");
+
+            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, Global.RtmpMaxConnections * 100); // TODO: adjust for HD
+            Global.MediaAllocator = new PacketBufferAllocator(Global.OneMediaBufferSize, Global.RtmpMaxConnections);
+            Global.SegmentAllocator = new PacketBufferAllocator(Global.SegmentBufferSize, Global.RtmpMaxConnections / 50);
+
             if (System.Environment.UserInteractive)
             {
                 if (args.Length > 0)
@@ -27,9 +32,6 @@
                     {
                         case "-standalone":
                             {
-                                // TODO: adjust
-                                Global.Allocator = new PacketBufferAllocator(10240, 1024);
-                                Global.MediaAllocator = new PacketBufferAllocator(1024 * 1024, 1024);
                                 RtmpServer server = new RtmpServer();
                                 server.Start();
 

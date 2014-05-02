@@ -8,7 +8,7 @@
     using System.Text;
     using System.Threading.Tasks;
 
-    public class SmoothStreamingPublisher
+    public class SmoothStreamingPublisher : IDisposable
     {
         private string publishUri = null;
         private Dictionary<int, HttpWebRequest> webRequests = new Dictionary<int, HttpWebRequest>();
@@ -19,6 +19,31 @@
             // TODO: create publishing point using REST API for IIS Media Services?
             this.publishUri = publishUri;
         }
+
+        #region IDisposable
+
+        /// <summary>
+        /// Releases resources.
+        /// </summary>
+        public void Dispose()
+        {
+            foreach (Stream webRequestStream in this.webRequestStreams.Values)
+            {
+                try
+                {
+                    webRequestStream.Close();
+                    webRequestStream.Dispose();
+                }
+                catch
+                {
+                }
+            }
+
+            this.webRequestStreams.Clear();
+            this.webRequests.Clear();
+        }
+
+        #endregion
 
         public void PushData(int streamId, byte[] buffer, int offset, int length)
         {

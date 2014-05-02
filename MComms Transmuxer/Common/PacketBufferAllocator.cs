@@ -55,6 +55,8 @@
         {
             lock (this)
             {
+                Global.Log.WarnFormat("Re-allocating buffers size {0} count {1}", bufferSize, bufferCount);
+
                 this.bufferSize = bufferSize;
 
                 // delete all free buffers

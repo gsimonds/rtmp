@@ -10,18 +10,23 @@
 
     public class RtmpMessageMedia : RtmpMessage
     {
-        public RtmpMessageMedia(RtmpVideoCodec videoCodec, bool keyFrame)
+        public RtmpMessageMedia(RtmpVideoCodec videoCodec, RtmpMediaPacketType packetType, int decoderDelay, bool keyFrame)
         {
             this.MessageType = RtmpIntMessageType.Video;
             this.ContentType = MediaContentType.Video;
+            this.PacketType = packetType;
+            this.DecoderDelay = decoderDelay;
+            this.MediaDataOffset = 5; // RTMP media packet header: 1 byte, packet type: 1 byte, decoder delay: 3 bytes
             this.VideoCodec = videoCodec;
             this.KeyFrame = keyFrame;
         }
 
-        public RtmpMessageMedia(RtmpAudioCodec audioCodec, int sampleRate, int sampleSize, int channels)
+        public RtmpMessageMedia(RtmpAudioCodec audioCodec, RtmpMediaPacketType packetType, int sampleRate, int sampleSize, int channels)
         {
             this.MessageType = RtmpIntMessageType.Audio;
             this.ContentType = MediaContentType.Audio;
+            this.PacketType = packetType;
+            this.MediaDataOffset = 2; // RTMP media packet header: 1 byte, packet type: 1 byte
             this.AudioCodec = audioCodec;
             this.SampleRate = sampleRate;
             this.SampleSize = sampleSize;
@@ -30,9 +35,15 @@
 
         public MediaContentType ContentType { get; set; }
 
+        public RtmpMediaPacketType PacketType { get; set; }
+
+        public int MediaDataOffset { get; set; }
+
         public RtmpVideoCodec VideoCodec { get; set; }
 
         public bool KeyFrame { get; set; }
+
+        public int DecoderDelay { get; set; }
 
         public RtmpAudioCodec AudioCodec { get; set; }
 

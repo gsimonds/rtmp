@@ -24,9 +24,9 @@
 
         protected override void OnStart(string[] args)
         {
-            Global.Allocator = new PacketBufferAllocator(10240, 10240);
             server = new RtmpServer();
             server.Start();
+
             Global.Log.Info("MComms Transmuxer started in service mode");
         }
 

@@ -36,6 +36,12 @@
                 case "FCUnpublish":
                     this.MessageType = RtmpIntMessageType.CommandNetConnectionFCUnpublish;
                     break;
+                case "onFCUnpublish":
+                    this.MessageType = RtmpIntMessageType.CommandNetConnectionFCUnpublish;
+                    break;
+                case "closeStream":
+                    this.MessageType = RtmpIntMessageType.CommandNetStreamCloseStream;
+                    break;
                 case "deleteStream":
                     this.MessageType = RtmpIntMessageType.CommandNetStreamDeleteStream;
                     break;

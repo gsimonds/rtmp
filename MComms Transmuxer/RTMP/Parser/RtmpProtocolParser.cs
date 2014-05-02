@@ -15,6 +15,7 @@
         private RtmpHandshake handshake = new RtmpHandshake();
         private Dictionary<uint, RtmpChunkStream> chunkStreams = new Dictionary<uint, RtmpChunkStream>();
         private List<int> registeredMessageStreams = new List<int>();
+        private bool aligning = false;
 
         /// <summary>
         /// Output packet queue. We're using List instead of Queue to allow insertion
@@ -59,13 +60,14 @@
             {
                 // if we have the packet then add it to the end of the stream
                 this.dataStream.Append(dataPacket, 0, dataPacket.ActualBufferSize);
-                this.dataStream.Seek(0, System.IO.SeekOrigin.Begin);
             }
 
             if (this.dataStream.Length == 0)
             {
                 return null;
             }
+
+            this.dataStream.Seek(0, System.IO.SeekOrigin.Begin);
 
             switch (this.State)
             {
@@ -119,11 +121,21 @@
                             {
                                 // unregistered stream: most certainly we've lost chunk synchronization
                                 // drop everything in current stream (trying to re-align to the next chunk)
-                                Global.Log.ErrorFormat("Received unknown message stream {0}", messageStreamId);
-                                Global.Log.ErrorFormat("Dropping {0} bytes and re-aligning to the next chunk...", dataStream.Length - dataStream.Position + hdr.HeaderSize);
+                                if (!this.aligning)
+                                {
+                                    Global.Log.ErrorFormat("Received unknown message stream {0}", messageStreamId);
+                                    Global.Log.ErrorFormat("Dropping {0} bytes and re-aligning to the next chunk...", dataStream.Length - dataStream.Position + hdr.HeaderSize);
+                                    this.aligning = true;
+                                }
                                 dataStream.Seek(0, System.IO.SeekOrigin.End);
                                 dataStream.TrimBegin();
                                 break;
+                            }
+
+                            if (this.aligning)
+                            {
+                                Global.Log.ErrorFormat("Re-aligned to the chunk start");
+                                this.aligning = false;
                             }
 
                             canContinue = true;

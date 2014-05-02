@@ -35,6 +35,12 @@
         /// </summary>
         public void Dispose()
         {
+            if (this.publisher != null)
+            {
+                this.publisher.Dispose();
+                this.publisher = null;
+            }
+
             if (this.muxId >= 0)
             {
                 SmoothStreamingSegmenter.MCSSF_Uninitialize(this.muxId);
@@ -131,7 +137,6 @@
                 IntPtr extraDataPtr = IntPtr.Add(this.mediaDataPtr, Marshal.SizeOf(mvih) - 4); // TODO: research this 4 byte diff
                 Marshal.Copy(privateData, 0, extraDataPtr, privateDataSize);
 
-                // TODO: initialize first timestamp of segmenter
                 streamId = SmoothStreamingSegmenter.MCSSF_AddStream(this.muxId, 2 /* video */, mediaType.Bitrate, 0, totalDataSize - 4, this.mediaDataPtr);
             }
             else if (mediaType.ContentType == MediaContentType.Audio)
@@ -150,7 +155,6 @@
                 IntPtr extraDataPtr = IntPtr.Add(this.mediaDataPtr, Marshal.SizeOf(wfx) - 2);
                 Marshal.Copy(mediaType.PrivateData, 0, extraDataPtr, mediaType.PrivateData.Length);
 
-                // TODO: initialize first timestamp of segmenter
                 streamId = SmoothStreamingSegmenter.MCSSF_AddStream(this.muxId, 1 /* audio */, mediaType.Bitrate, 0, totalDataSize - 2, this.mediaDataPtr);
             }
             else
@@ -176,17 +180,22 @@
                 throw new CriticalStreamException(string.Format("MCSSF_GetHeader failed {0}", res));
             }
 
-            PacketBuffer header = Global.MediaAllocator.LockBuffer();
-            PacketBuffer tmp = Global.MediaAllocator.LockBuffer();
-            //Marshal.Copy(headerPtr, tmp.Buffer, 0, headerSize);
-            Marshal.Copy(headerPtr, header.Buffer, 0, headerSize);
+            if (headerSize > Global.MediaAllocator.BufferSize)
+            {
+                // increase buffer sizes
+                Global.MediaAllocator.Reallocate(headerSize * 3 / 2, Global.MediaAllocator.BufferCount);
+            }
 
+            PacketBuffer header = Global.MediaAllocator.LockBuffer();
+            Marshal.Copy(headerPtr, header.Buffer, 0, headerSize);
             header.ActualBufferSize = headerSize;
+
+            //PacketBuffer tmp = Global.MediaAllocator.LockBuffer();
+            //Marshal.Copy(headerPtr, tmp.Buffer, 0, headerSize);
 
             try
             {
                 //this.CorrectHeader(tmp, header, streamId, mediaType);
-
                 if (header.ActualBufferSize > 0)
                 {
                     if (this.publisher == null)
@@ -199,12 +208,12 @@
             }
             catch
             {
-                tmp.Release();
+                //tmp.Release();
                 header.Release();
                 throw;
             }
 
-            tmp.Release();
+            //tmp.Release();
             header.Release();
         }
 
@@ -221,23 +230,22 @@
 
             int outputDataSize = 0;
             IntPtr outputDataPtr = IntPtr.Zero;
+            //Global.Log.DebugFormat("Stream {0}, timestamp {1}, keyframe {2}", streamId, timestamp, keyFrame);
             int pushResult = SmoothStreamingSegmenter.MCSSF_PushMedia(this.muxId, streamId, timestamp, 0, keyFrame, length, mediaDataPtr, out outputDataSize, out outputDataPtr);
 
-            // TODO: initialize first timestamp
-            //if (pushResult < 0)
-            //{
-            //    throw new CriticalStreamException(string.Format("MCSSF_PushMedia failed {0}", pushResult));
-            //}
+            if (pushResult < 0)
+            {
+                throw new CriticalStreamException(string.Format("MCSSF_PushMedia failed {0}", pushResult));
+            }
 
             if (outputDataSize > 0)
             {
-                // TODO: use another allocator for segments?
-                if (outputDataSize > Global.MediaAllocator.BufferSize)
+                if (outputDataSize > Global.SegmentAllocator.BufferSize)
                 {
-                    Global.MediaAllocator.Reallocate(outputDataSize * 3 / 2, Global.MediaAllocator.BufferCount);
+                    Global.SegmentAllocator.Reallocate(outputDataSize * 3 / 2, Global.SegmentAllocator.BufferCount);
                 }
 
-                PacketBuffer segment = Global.MediaAllocator.LockBuffer();
+                PacketBuffer segment = Global.SegmentAllocator.LockBuffer();
                 Marshal.Copy(outputDataPtr, segment.Buffer, 0, outputDataSize);
 
                 try

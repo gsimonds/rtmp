@@ -31,6 +31,7 @@
         private SmoothStreamingSegmenter segmenter = null;
         private string publishName = null;
         private string publishUri = null;
+        private bool publishing = false;
 
         public RtmpMessageStream(int messageStreamId)
         {
@@ -50,6 +51,33 @@
                 this.publishName = value;
                 // TODO: set proper
                 this.publishUri = "http://192.168.0.101/sspush.isml";
+            }
+        }
+
+        public bool Publishing
+        {
+            get
+            {
+                return this.publishing;
+            }
+            set
+            {
+                this.publishing = value;
+                if (this.publishing)
+                {
+                    if (this.segmenter == null)
+                    {
+                        this.segmenter = new SmoothStreamingSegmenter(this.publishUri);
+                    }
+                }
+                else
+                {
+                    if (this.segmenter != null)
+                    {
+                        this.segmenter.Dispose();
+                        this.segmenter = null;
+                    }
+                }
             }
         }
 
@@ -217,6 +245,11 @@
 
         public void ProcessMediaData(RtmpMessageMedia msg)
         {
+            if (this.segmenter == null)
+            {
+                throw new CriticalStreamException(string.Format("Command {0}, media data is unexpected in current state, dropping session...", msg.MessageType));
+            }
+
             switch (msg.MessageType)
             {
                 case RtmpIntMessageType.Audio:
@@ -263,14 +296,27 @@
                 Global.Log.DebugFormat("Audio private data: {0}", sb.ToString());
 #endif
 
-                int privateDataLen = msg.MediaData.ActualBufferSize - 1 /* RTMP media packet header */ - 1 /* RTMP AAC specific byte? */;
+                // check packet type
+                if (msg.PacketType != RtmpMediaPacketType.Configuration)
+                {
+                    throw new CriticalStreamException(string.Format("Command {0}, not audio configuration packet {1}", msg.MessageType, msg.PacketType));
+                }
+
+                // check packet type
+                int privateDataLen = msg.MediaData.ActualBufferSize - msg.MediaDataOffset;
+
+                if (privateDataLen <= 0)
+                {
+                    throw new CriticalStreamException(string.Format("Command {0}, no audio private data found", msg.MessageType));
+                }
+
+                if (privateDataLen < 3)
+                {
+                    throw new CriticalStreamException(string.Format("Command {0}, wrong audio private data format", msg.MessageType));
+                }
+
                 this.audioMediaType.PrivateData = new byte[privateDataLen];
                 Array.Copy(msg.MediaData.Buffer, msg.MediaData.ActualBufferSize - privateDataLen, this.audioMediaType.PrivateData, 0, privateDataLen);
-
-                if (this.segmenter == null)
-                {
-                    this.segmenter = new SmoothStreamingSegmenter(this.publishUri);
-                }
 
                 this.audioStreamId = this.segmenter.RegisterStream(this.audioMediaType);
 
@@ -280,13 +326,26 @@
             {
                 if (!this.headerSent)
                 {
-                    this.segmenter.PushHeader(this.audioStreamId);
-                    this.segmenter.PushHeader(this.videoStreamId);
-                    this.headerSent = true;
+                    this.PublishHeader();
                 }
 
-                // push to Smooth Streaming segmenter
-                this.segmenter.PushMediaData(this.audioStreamId, msg.Timestamp * 10000, true, msg.MediaData.Buffer, 2, msg.MediaData.ActualBufferSize - 2);
+                // start pushing media data after header has been sent
+                if (this.headerSent)
+                {
+                    if (msg.PacketType == RtmpMediaPacketType.Media)
+                    {
+                        // push to Smooth Streaming segmenter
+                        this.segmenter.PushMediaData(this.audioStreamId, msg.Timestamp * 10000, true, msg.MediaData.Buffer, msg.MediaDataOffset, msg.MediaData.ActualBufferSize - msg.MediaDataOffset);
+                    }
+                    else if (msg.PacketType == RtmpMediaPacketType.Eos)
+                    {
+                        Global.Log.DebugFormat("Received audio EOS");
+                    }
+                    else
+                    {
+                        Global.Log.DebugFormat("Received unexpected audio packet type {0}", msg.PacketType);
+                    }
+                }
             }
         }
 
@@ -317,29 +376,22 @@
                 Global.Log.DebugFormat("Video private data: {0}", sb.ToString());
 #endif
 
-                int privateDataLen = msg.MediaData.ActualBufferSize - 1 /* RTMP media packet header */;
-
-                // skip leading zeroes
-                for (int i = 1; i < msg.MediaData.ActualBufferSize; ++i)
+                if (msg.PacketType != RtmpMediaPacketType.Configuration)
                 {
-                    if (msg.MediaData.Buffer[i] == 0)
-                    {
-                        privateDataLen--;
-                    }
-                    else
-                    {
-                        break;
-                    }
+                    throw new CriticalStreamException(string.Format("Command {0}, not video configuration packet {1}", msg.MessageType, msg.PacketType));
                 }
+
+                // check packet type
+                int privateDataLen = msg.MediaData.ActualBufferSize - msg.MediaDataOffset;
 
                 if (privateDataLen <= 0)
                 {
                     throw new CriticalStreamException(string.Format("Command {0}, no video private data found", msg.MessageType));
                 }
 
-                if (privateDataLen < 7 || msg.MediaData.Buffer[msg.MediaData.ActualBufferSize - privateDataLen] != 1)
+                if (privateDataLen < 7 || msg.MediaData.Buffer[msg.MediaDataOffset] != 1)
                 {
-                    throw new CriticalStreamException(string.Format("Command {0}, wrong private data format", msg.MessageType));
+                    throw new CriticalStreamException(string.Format("Command {0}, wrong video private data format", msg.MessageType));
                 }
 
                 this.videoMediaType.PrivateData = new byte[privateDataLen];
@@ -349,11 +401,6 @@
                 this.videoMediaType.PrivateData[4] |= 0xFC;
                 this.videoMediaType.PrivateData[5] |= 0xE0;
 
-                if (this.segmenter == null)
-                {
-                    this.segmenter = new SmoothStreamingSegmenter(this.publishUri);
-                }
-
                 this.videoStreamId = this.segmenter.RegisterStream(this.videoMediaType);
 
                 this.firstVideoFrame = false;
@@ -362,14 +409,50 @@
             {
                 if (!this.headerSent)
                 {
-                    this.segmenter.PushHeader(this.audioStreamId);
-                    this.segmenter.PushHeader(this.videoStreamId);
-                    this.headerSent = true;
+                    this.PublishHeader();
                 }
 
-                // push to Smooth Streaming segmenter
-                this.segmenter.PushMediaData(this.videoStreamId, msg.Timestamp * 10000, msg.KeyFrame, msg.MediaData.Buffer, 5, msg.MediaData.ActualBufferSize - 5);
+                // start pushing media data after header has been sent
+                if (this.headerSent)
+                {
+                    if (msg.PacketType == RtmpMediaPacketType.Media)
+                    {
+                        // push to Smooth Streaming segmenter
+                        this.segmenter.PushMediaData(this.videoStreamId, msg.Timestamp * 10000, msg.KeyFrame, msg.MediaData.Buffer, msg.MediaDataOffset, msg.MediaData.ActualBufferSize - msg.MediaDataOffset);
+                    }
+                    else if (msg.PacketType == RtmpMediaPacketType.Eos)
+                    {
+                        Global.Log.DebugFormat("Received video EOS");
+                    }
+                    else
+                    {
+                        Global.Log.DebugFormat("Received unexpected video packet type {0}", msg.PacketType);
+                    }
+                }
             }
+        }
+
+        private void PublishHeader()
+        {
+            if (this.headerSent) return;
+
+            // we havent's received audio configuration yet
+            if (this.audioMediaType != null && this.audioStreamId < 0) return;
+
+            // we havent's received video configuration yet
+            if (this.videoMediaType != null && this.videoStreamId < 0) return;
+
+            if (this.audioStreamId >= 0)
+            {
+                this.segmenter.PushHeader(this.audioStreamId);
+            }
+
+            if (this.videoStreamId >= 0)
+            {
+                this.segmenter.PushHeader(this.videoStreamId);
+            }
+
+            this.headerSent = true;
         }
     }
 }

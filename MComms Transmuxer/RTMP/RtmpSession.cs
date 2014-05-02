@@ -34,6 +34,7 @@
         private uint receiveAckWindowSize = Global.RtmpDefaultAckWindowSize;
         private uint sendAckWindowSize = Global.RtmpDefaultAckWindowSize;
         private Dictionary<int, RtmpMessageStream> messageStreams = new Dictionary<int, RtmpMessageStream>();
+        private DateTime lastActivity = DateTime.Now;
 
         public RtmpSession(long sessionId, SocketTransport transport, IPEndPoint sessionEndPoint)
         {
@@ -45,16 +46,24 @@
             Global.Log.DebugFormat("End point {0}, id {1}: created session object", this.sessionEndPoint, this.sessionId);
         }
 
+        #region IDisposable
+
         public void Dispose()
         {
             this.isRunning = false;
-            this.sessionThread.Join();
-            foreach (RtmpMessageStream messageStream in messageStreams.Values)
+
+            if (this.sessionThread != null)
             {
-                messageStream.Dispose();
+                this.sessionThread.Join();
+                this.sessionThread = null;
             }
+
+            this.ReleaseMessageStreams();
+
             Global.Log.DebugFormat("End point {0}, id {1}: session object disposed", this.sessionEndPoint, this.sessionId);
         }
+
+        #endregion
 
         public void OnReceive(PacketBuffer packet)
         {
@@ -142,6 +151,14 @@
                     packet.Release();
                 }
 
+                // disconnect by inactivity
+                if ((DateTime.Now - this.lastActivity).TotalMilliseconds >= Global.RtmpSessionInactivityTimeoutMs)
+                {
+                    Global.Log.ErrorFormat("Dropping inactive session ({0} ms timeout)", this.state, (DateTime.Now - this.lastActivity).TotalMilliseconds);
+                    this.transport.Disconnect(this.sessionEndPoint);
+                    break;
+                }
+
                 if (nothingToDo)
                 {
                     // sleep only if we don't have anything to do
@@ -154,6 +171,8 @@
 
         private void ProcessMessage(RtmpMessage msg)
         {
+            this.lastActivity = DateTime.Now;
+
             switch (msg.MessageType)
             {
                 case RtmpIntMessageType.HandshakeC0:
@@ -161,6 +180,7 @@
                         if (this.state != RtmpSessionState.Uninitialized)
                         {
                             // wrong handshake sequence
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
                             this.transport.Disconnect(this.sessionEndPoint);
                             break;
                         }
@@ -178,6 +198,7 @@
                         else
                         {
                             // unsupported protocol version
+                            Global.Log.ErrorFormat("Unsupported protocol version {0}, dropping session...", handshake.Version);
                             this.transport.Disconnect(this.sessionEndPoint);
                         }
 
@@ -189,6 +210,7 @@
                         if (this.state != RtmpSessionState.HanshakeVersionSent)
                         {
                             // wrong handshake sequence
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
                             this.transport.Disconnect(this.sessionEndPoint);
                             break;
                         }
@@ -206,6 +228,7 @@
                         if (this.state != RtmpSessionState.HanshakeAckSent)
                         {
                             // wrong handshake sequence
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
                             this.transport.Disconnect(this.sessionEndPoint);
                             break;
                         }
@@ -221,6 +244,7 @@
                         else
                         {
                             // handshake validation failed
+                            Global.Log.Error("Handshake validation failed, dropping session...");
                             this.transport.Disconnect(this.sessionEndPoint);
                         }
 
@@ -229,6 +253,14 @@
 
                 case RtmpIntMessageType.ProtoControlSetChunkSize:
                     {
+                        if (this.state != RtmpSessionState.Receiving)
+                        {
+                            // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
                         RtmpMessageSetChunkSize recvCtrl = (RtmpMessageSetChunkSize)msg;
                         this.parser.ChunkSize = (int)recvCtrl.ChunkSize;
                         Global.Log.DebugFormat("Received {0}, new chunk size {1}", msg.MessageType, recvCtrl.ChunkSize);
@@ -237,6 +269,14 @@
 
                 case RtmpIntMessageType.ProtoControlAbort:
                     {
+                        if (this.state != RtmpSessionState.Receiving)
+                        {
+                            // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
                         RtmpMessageAbort recvCtrl = (RtmpMessageAbort)msg;
                         this.parser.Abort((uint)recvCtrl.TargetChunkStreamId);
                         Global.Log.DebugFormat("Received {0}, aborted chunk stream {1}", msg.MessageType, recvCtrl.TargetChunkStreamId);
@@ -245,6 +285,14 @@
 
                 case RtmpIntMessageType.ProtoControlAknowledgement:
                     {
+                        if (this.state != RtmpSessionState.Receiving)
+                        {
+                            // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
                         RtmpMessageAck recvCtrl = (RtmpMessageAck)msg;
                         this.lastReportedSentSize = recvCtrl.ReceivedBytes;
                         Global.Log.DebugFormat("Received {0}, reported size {1}, actually sent {2}", msg.MessageType, recvCtrl.ReceivedBytes, this.sentSize);
@@ -254,6 +302,14 @@
 
                 case RtmpIntMessageType.ProtoControlUserControl:
                     {
+                        if (this.state != RtmpSessionState.Receiving)
+                        {
+                            // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
                         RtmpMessageUserControl recvCtrl = (RtmpMessageUserControl)msg;
                         switch (recvCtrl.EventType)
                         {
@@ -274,6 +330,14 @@
 
                 case RtmpIntMessageType.ProtoControlWindowAknowledgementSize:
                     {
+                        if (this.state != RtmpSessionState.Receiving)
+                        {
+                            // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
                         RtmpMessageWindowAckSize recvCtrl = (RtmpMessageWindowAckSize)msg;
                         this.receiveAckWindowSize = recvCtrl.AckSize;
                         Global.Log.DebugFormat("Received {0}, new recv window size {1}", msg.MessageType, recvCtrl.AckSize);
@@ -282,6 +346,14 @@
 
                 case RtmpIntMessageType.ProtoControlSetPeerBandwidth:
                     {
+                        if (this.state != RtmpSessionState.Receiving)
+                        {
+                            // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
                         RtmpMessageSetPeerBandwidth recvCtrl = (RtmpMessageSetPeerBandwidth)msg;
                         if (this.sendAckWindowSize != recvCtrl.AckSize)
                         {
@@ -302,11 +374,30 @@
                             break;
                         }
 
+                        Global.Log.DebugFormat("Received command {0}", msg.MessageType);
+
                         RtmpMessageCommand recvComm = (RtmpMessageCommand)msg;
                         if (recvComm.Parameters.Count == 0 || recvComm.Parameters[0].GetType() != typeof(RtmpAmfObject))
                         {
                             // wrong command parameters
-                            this.transport.Disconnect(this.sessionEndPoint);
+                            Global.Log.DebugFormat("Unrecognized command parameters");
+
+                            List<object> errorPars = new List<object>();
+
+                            errorPars.Add(new RtmpAmfNull());
+
+                            RtmpAmfObject amf = new RtmpAmfObject();
+                            amf.Strings.Add("level", "status");
+                            amf.Strings.Add("code", "NetConnection.Connect.Failed");
+                            amf.Strings.Add("description", "Unrecognized command parameters");
+                            amf.Numbers.Add("clientId", this.sessionId);
+                            errorPars.Add(amf);
+
+                            RtmpMessageCommand sendComm = new RtmpMessageCommand("_error", 1, errorPars);
+                            sendComm.ChunkStreamId = recvComm.ChunkStreamId;
+                            sendComm.MessageStreamId = recvComm.MessageStreamId;
+
+                            this.parser.Encode(sendComm);
                             break;
                         }
 
@@ -316,12 +407,28 @@
                         if (!par.Strings.ContainsKey("app") || par.Strings["app"] != "live")
                         {
                             // wrong app
-                            this.transport.Disconnect(this.sessionEndPoint);
+                            Global.Log.DebugFormat("Unsupported application {0}", par.Strings.ContainsKey("app") ? par.Strings["app"] : string.Empty);
+
+                            List<object> errorPars = new List<object>();
+
+                            errorPars.Add(new RtmpAmfNull());
+
+                            RtmpAmfObject amf = new RtmpAmfObject();
+                            amf.Strings.Add("level", "status");
+                            amf.Strings.Add("code", "NetConnection.Connect.Failed");
+                            amf.Strings.Add("description", "Unsupported application");
+                            amf.Numbers.Add("clientId", this.sessionId);
+                            errorPars.Add(amf);
+
+                            RtmpMessageCommand sendComm = new RtmpMessageCommand("_error", 1, errorPars);
+                            sendComm.ChunkStreamId = recvComm.ChunkStreamId;
+                            sendComm.MessageStreamId = recvComm.MessageStreamId;
+
+                            this.parser.Encode(sendComm);
                             break;
                         }
 
                         // prepare reply
-                        Global.Log.DebugFormat("Received command {0}", msg.MessageType);
 
                         // send window acknowledgement size
                         this.parser.Encode(new RtmpMessageWindowAckSize(this.sendAckWindowSize));
@@ -332,32 +439,31 @@
                         // send user control event "Stream 0 Begins"
                         this.parser.Encode(new RtmpMessageUserControl(RtmpMessageUserControl.EventTypes.StreamBegin, 0));
 
-                        // set sunk size to 1024 bytes
-                        this.parser.Encode(new RtmpMessageSetChunkSize(1024));
-                        //this.parser.ChunkSize = 1024;
+                        // set sunk size
+                        this.parser.Encode(new RtmpMessageSetChunkSize(Global.RtmpOurChunkSize));
 
-                        List<object> pars = new List<object>();
+                        {
+                            List<object> pars = new List<object>();
 
-                        RtmpAmfObject amf = new RtmpAmfObject();
-                        amf.Strings.Add("fmsVer", "FMS/3,0,1,123"); // NOTE: value taken from FFmpeg implementation
-                        amf.Numbers.Add("capabilities", 31); // NOTE: value taken from FFmpeg implementation
-                        amf.Numbers.Add("mode", 1); // TODO: adjust
-                        pars.Add(amf);
+                            RtmpAmfObject amf = new RtmpAmfObject();
+                            amf.Strings.Add("fmsVer", "FMS/3,0,1,123"); // NOTE: value taken from FFmpeg implementation
+                            amf.Numbers.Add("capabilities", 31); // NOTE: value taken from FFmpeg implementation
+                            pars.Add(amf);
 
-                        amf = new RtmpAmfObject();
-                        amf.Strings.Add("level", "status");
-                        amf.Strings.Add("code", "NetConnection.Connect.Success");
-                        amf.Strings.Add("description", "Connection succeeded.");
-                        // TODO: "data" array?
-                        amf.Numbers.Add("clientId", this.sessionId);
-                        amf.Numbers.Add("objectEncoding", 0); // AMF0
-                        pars.Add(amf);
+                            amf = new RtmpAmfObject();
+                            amf.Strings.Add("level", "status");
+                            amf.Strings.Add("code", "NetConnection.Connect.Success");
+                            amf.Strings.Add("description", "Connection succeeded.");
+                            amf.Numbers.Add("clientId", this.sessionId);
+                            amf.Numbers.Add("objectEncoding", 0); // AMF0
+                            pars.Add(amf);
 
-                        RtmpMessageCommand sendComm = new RtmpMessageCommand("_result", 1, pars);
-                        sendComm.ChunkStreamId = recvComm.ChunkStreamId;
-                        sendComm.MessageStreamId = recvComm.MessageStreamId;
+                            RtmpMessageCommand sendComm = new RtmpMessageCommand("_result", 1, pars);
+                            sendComm.ChunkStreamId = recvComm.ChunkStreamId;
+                            sendComm.MessageStreamId = recvComm.MessageStreamId;
 
-                        this.parser.Encode(sendComm);
+                            this.parser.Encode(sendComm);
+                        }
 
                         break;
                     }
@@ -372,7 +478,9 @@
                             break;
                         }
 
-                        // TODO: implement
+                        // release all message streams if any
+                        this.ReleaseMessageStreams();
+
                         Global.Log.DebugFormat("Received command {0}", msg.MessageType);
                         break;
                     }
@@ -470,8 +578,24 @@
                         if (messageStream == null)
                         {
                             // wrong publish sequence
-                            Global.Log.ErrorFormat("Command {0}, unregistered message stream {1}, dropping session...", msg.MessageType, msg.MessageStreamId);
-                            this.transport.Disconnect(this.sessionEndPoint);
+                            Global.Log.ErrorFormat("Command {0}, unregistered message stream {1}", msg.MessageType, msg.MessageStreamId);
+
+                            List<object> errorPars = new List<object>();
+
+                            errorPars.Add(new RtmpAmfNull());
+
+                            RtmpAmfObject amf = new RtmpAmfObject();
+                            amf.Strings.Add("level", "status");
+                            amf.Strings.Add("code", "NetStream.Publish.Failed");
+                            amf.Strings.Add("description", "Unregistered message stream");
+                            amf.Numbers.Add("clientId", this.sessionId);
+                            errorPars.Add(amf);
+
+                            RtmpMessageCommand sendComm = new RtmpMessageCommand("onStatus", 0, errorPars);
+                            sendComm.ChunkStreamId = msg.ChunkStreamId;
+                            sendComm.MessageStreamId = msg.MessageStreamId;
+
+                            this.parser.Encode(sendComm);
                             break;
                         }
 
@@ -481,8 +605,24 @@
                             recvComm.Parameters[2].GetType() != typeof(string))
                         {
                             // wrong command parameters
-                            Global.Log.ErrorFormat("Command {0}, corrupted parameters, dropping session...", msg.MessageType);
-                            this.transport.Disconnect(this.sessionEndPoint);
+                            Global.Log.ErrorFormat("Command {0}, corrupted parameters", msg.MessageType);
+
+                            List<object> errorPars = new List<object>();
+
+                            errorPars.Add(new RtmpAmfNull());
+
+                            RtmpAmfObject amf = new RtmpAmfObject();
+                            amf.Strings.Add("level", "status");
+                            amf.Strings.Add("code", "NetStream.Publish.Failed");
+                            amf.Strings.Add("description", "Unrecognized command parameters");
+                            amf.Numbers.Add("clientId", this.sessionId);
+                            errorPars.Add(amf);
+
+                            RtmpMessageCommand sendComm = new RtmpMessageCommand("onStatus", 0, errorPars);
+                            sendComm.ChunkStreamId = msg.ChunkStreamId;
+                            sendComm.MessageStreamId = msg.MessageStreamId;
+
+                            this.parser.Encode(sendComm);
                             break;
                         }
 
@@ -492,13 +632,38 @@
                         if (publishType != "live")
                         {
                             // wrong app
-                            Global.Log.ErrorFormat("Command {0}, unsupported publish type {1}, dropping session...", msg.MessageType, publishType);
-                            this.transport.Disconnect(this.sessionEndPoint);
+                            Global.Log.ErrorFormat("Command {0}, unsupported publish type {1}", msg.MessageType, publishType);
+
+                            List<object> errorPars = new List<object>();
+
+                            errorPars.Add(new RtmpAmfNull());
+
+                            RtmpAmfObject amf = new RtmpAmfObject();
+                            amf.Strings.Add("level", "status");
+                            amf.Strings.Add("code", "NetStream.Publish.Failed");
+                            amf.Strings.Add("description", "Unsupported application");
+                            amf.Numbers.Add("clientId", this.sessionId);
+                            errorPars.Add(amf);
+
+                            RtmpMessageCommand sendComm = new RtmpMessageCommand("onStatus", 0, errorPars);
+                            sendComm.ChunkStreamId = msg.ChunkStreamId;
+                            sendComm.MessageStreamId = msg.MessageStreamId;
+
+                            this.parser.Encode(sendComm);
                             break;
                         }
 
-                        // TODO: parse publishStreamName: query string, totalDatarate parameter
-                        messageStream.PublishName = (string)recvComm.Parameters[1];
+                        string publishName = (string)recvComm.Parameters[1];
+
+                        // remove query part from the publish name
+                        int queryPos = publishName.IndexOf('?');
+                        if (queryPos >= 0)
+                        {
+                            publishName = publishName.Substring(0, queryPos);
+                        }
+
+                        messageStream.PublishName = publishName;
+                        messageStream.Publishing = true; // creating segmenter
 
                         // prepare reply
                         Global.Log.DebugFormat("Received command {0}", msg.MessageType);
@@ -506,22 +671,178 @@
                         // send user control event "Stream N Begins"
                         this.parser.Encode(new RtmpMessageUserControl(RtmpMessageUserControl.EventTypes.StreamBegin, recvComm.MessageStreamId));
 
-                        List<object> pars = new List<object>();
+                        {
+                            List<object> pars = new List<object>();
 
-                        pars.Add(new RtmpAmfNull());
+                            pars.Add(new RtmpAmfNull());
 
-                        RtmpAmfObject amf = new RtmpAmfObject();
-                        amf.Strings.Add("level", "status");
-                        amf.Strings.Add("code", "NetStream.Publish.Start");
-                        amf.Strings.Add("description", "Publishing " + messageStream.PublishName);
-                        amf.Numbers.Add("clientId", this.sessionId);
-                        pars.Add(amf);
+                            RtmpAmfObject amf = new RtmpAmfObject();
+                            amf.Strings.Add("level", "status");
+                            amf.Strings.Add("code", "NetStream.Publish.Start");
+                            amf.Strings.Add("description", "Publishing " + messageStream.PublishName);
+                            amf.Numbers.Add("clientId", this.sessionId);
+                            pars.Add(amf);
 
-                        RtmpMessageCommand sendComm = new RtmpMessageCommand("onStatus", 0, pars);
-                        sendComm.ChunkStreamId = recvComm.ChunkStreamId;
-                        sendComm.MessageStreamId = recvComm.MessageStreamId;
+                            RtmpMessageCommand sendComm = new RtmpMessageCommand("onStatus", 0, pars);
+                            sendComm.ChunkStreamId = recvComm.ChunkStreamId;
+                            sendComm.MessageStreamId = recvComm.MessageStreamId;
 
-                        this.parser.Encode(sendComm);
+                            this.parser.Encode(sendComm);
+                        }
+
+                        break;
+                    }
+
+                case RtmpIntMessageType.CommandNetConnectionFCUnpublish:
+                    {
+                        if (this.state != RtmpSessionState.Receiving)
+                        {
+                            // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        RtmpMessageCommand recvComm = (RtmpMessageCommand)msg;
+                        if (recvComm.Parameters.Count < 2 ||
+                            recvComm.Parameters[1].GetType() != typeof(string))
+                        {
+                            // wrong command parameters
+                            Global.Log.ErrorFormat("Command {0}, corrupted parameters", msg.MessageType);
+
+                            List<object> errorPars = new List<object>();
+
+                            errorPars.Add(new RtmpAmfNull());
+
+                            RtmpAmfObject amf = new RtmpAmfObject();
+                            amf.Strings.Add("level", "status");
+                            amf.Strings.Add("code", "NetStream.Publish.Failed");
+                            amf.Strings.Add("description", "Unrecognized command parameters");
+                            amf.Numbers.Add("clientId", this.sessionId);
+                            errorPars.Add(amf);
+
+                            RtmpMessageCommand sendComm = new RtmpMessageCommand("onFCUnpublish", 0, errorPars);
+                            sendComm.ChunkStreamId = msg.ChunkStreamId;
+                            sendComm.MessageStreamId = msg.MessageStreamId;
+
+                            this.parser.Encode(sendComm);
+                            break;
+                        }
+
+                        Global.Log.DebugFormat("Received command {0}", msg.MessageType);
+
+                        string publishName = (string)recvComm.Parameters[1];
+
+                        // remove query part from the publish name
+                        int queryPos = publishName.IndexOf('?');
+                        if (queryPos >= 0)
+                        {
+                            publishName = publishName.Substring(0, queryPos);
+                        }
+
+                        // close IIS connection and release segmenter
+                        foreach (RtmpMessageStream messageStream in messageStreams.Values)
+                        {
+                            if (messageStream.PublishName == publishName)
+                            {
+                                messageStream.Publishing = false;
+                                Global.Log.DebugFormat("Unpublished message stream {0}, publish name {1}", messageStream.MessageStreamId, messageStream.PublishName);
+                            }
+                        }
+
+                        {
+                            List<object> pars = new List<object>();
+
+                            pars.Add(new RtmpAmfNull());
+
+                            RtmpAmfObject amf = new RtmpAmfObject();
+                            amf.Strings.Add("level", "status");
+                            amf.Strings.Add("code", "NetStream.Publish.Stop");
+                            amf.Strings.Add("description", "Unpublishing " + publishName);
+                            amf.Numbers.Add("clientId", this.sessionId);
+                            pars.Add(amf);
+
+                            RtmpMessageCommand sendComm = new RtmpMessageCommand("onFCUnpublish", 0, pars);
+                            sendComm.ChunkStreamId = recvComm.ChunkStreamId;
+                            sendComm.MessageStreamId = recvComm.MessageStreamId;
+
+                            this.parser.Encode(sendComm);
+                        }
+
+                        {
+                            List<object> pars = new List<object>();
+
+                            pars.Add(new RtmpAmfNull());
+
+                            RtmpAmfObject amf = new RtmpAmfObject();
+                            amf.Strings.Add("level", "status");
+                            amf.Strings.Add("code", "NetStream.Unpublish.Success");
+                            amf.Strings.Add("description", "Stream " + publishName + " has been unpublished");
+                            amf.Numbers.Add("clientId", this.sessionId);
+                            pars.Add(amf);
+
+                            RtmpMessageCommand sendComm = new RtmpMessageCommand("onStatus", 0, pars);
+                            sendComm.ChunkStreamId = recvComm.ChunkStreamId;
+                            sendComm.MessageStreamId = recvComm.MessageStreamId;
+
+                            this.parser.Encode(sendComm);
+                        }
+
+                        break;
+                    }
+
+                case RtmpIntMessageType.CommandNetStreamCloseStream:
+                    {
+                        if (this.state != RtmpSessionState.Receiving)
+                        {
+                            // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        Global.Log.DebugFormat("Received command {0}", msg.MessageType);
+
+                        // this is a redundant command, it could follow FCUnpublish
+                        // just in case reset publising flag one more time
+                        if (messageStreams.ContainsKey(msg.MessageStreamId))
+                        {
+                            messageStreams[msg.MessageStreamId].Publishing = false;
+                            Global.Log.DebugFormat("Closed message stream {0}", msg.MessageStreamId);
+                        }
+
+                        break;
+                    }
+
+                case RtmpIntMessageType.CommandNetStreamDeleteStream:
+                    {
+                        if (this.state != RtmpSessionState.Receiving)
+                        {
+                            // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        RtmpMessageCommand recvComm = (RtmpMessageCommand)msg;
+                        if (recvComm.Parameters.Count < 2 ||
+                            recvComm.Parameters[1].GetType() != typeof(double))
+                        {
+                            // wrong command parameters, just close connection
+                            Global.Log.ErrorFormat("Command {0}, corrupted parameters", msg.MessageType);
+                            this.transport.Disconnect(this.sessionEndPoint);
+                            break;
+                        }
+
+                        Global.Log.DebugFormat("Received command {0}", msg.MessageType);
+
+                        int messageStreamId = (int)(double)recvComm.Parameters[1];
+                        if (messageStreams.ContainsKey(messageStreamId))
+                        {
+                            messageStreams[messageStreamId].Dispose();
+                            messageStreams.Remove(messageStreamId);
+                            Global.Log.DebugFormat("Deleted message stream {0}", messageStreamId);
+                        }
 
                         break;
                     }
@@ -545,8 +866,7 @@
                         if (messageStream == null)
                         {
                             // unexpected message stream
-                            Global.Log.ErrorFormat("Command {0}, unregistered message stream {1}, dropping session...", msg.MessageType, msg.MessageStreamId);
-                            this.transport.Disconnect(this.sessionEndPoint);
+                            Global.Log.ErrorFormat("Command {0}, unregistered message stream {1}", msg.MessageType, msg.MessageStreamId);
                             break;
                         }
 
@@ -589,8 +909,7 @@
                         if (messageStream == null)
                         {
                             // unexpected message stream
-                            Global.Log.ErrorFormat("Command {0}, unregistered message stream {1}, dropping session...", msg.MessageType, msg.MessageStreamId);
-                            this.transport.Disconnect(this.sessionEndPoint);
+                            Global.Log.ErrorFormat("Command {0}, unregistered message stream {1}", msg.MessageType, msg.MessageStreamId);
                             break;
                         }
 
@@ -618,6 +937,7 @@
                         if (this.state != RtmpSessionState.Receiving)
                         {
                             // wrong state
+                            Global.Log.ErrorFormat("Command {0}, wrong state {1}, dropping session...", msg.MessageType, this.state);
                             this.transport.Disconnect(this.sessionEndPoint);
                             break;
                         }
@@ -626,6 +946,16 @@
                         break;
                     }
             }
+        }
+
+        private void ReleaseMessageStreams()
+        {
+            foreach (RtmpMessageStream messageStream in messageStreams.Values)
+            {
+                messageStream.Dispose();
+            }
+
+            messageStreams.Clear();
         }
     }
 }
