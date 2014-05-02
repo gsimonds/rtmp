@@ -71,12 +71,6 @@ namespace MComms_TransmuxerTests
 		[TestMethod()]
 		public void DecodeTestFCPublish()
         {
-            // create allocator with 1 buffer of 141 bytes
-            PacketBufferAllocator allocator = new PacketBufferAllocator(141, 1);
-            // PacketBuffer should be initialized this way, not via operator "new"
-            PacketBuffer packetBuffer = allocator.LockBuffer();
-
-            PacketBufferStream packetBufferStream = new PacketBufferStream(packetBuffer);
             byte[] dataBuffer = new byte[]
 			{
 				//Header
@@ -92,15 +86,22 @@ namespace MComms_TransmuxerTests
 				0x74, 0x72, 0x65, 0x61, 0x6d, 0x35, 0x2e, 0x00, 0x08, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x69,
 				0x64, 0x00, 0x41, 0xd4, 0x93, 0xa7, 0xe0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09
 			};
+            // create allocator with 1 buffer of 141 bytes
+            PacketBufferAllocator allocator = new PacketBufferAllocator(dataBuffer.GetLength(0), 1);
+            // PacketBuffer should be initialized this way, not via operator "new"
+            PacketBuffer packetBuffer = allocator.LockBuffer();
 
+            PacketBufferStream packetBufferStream = new PacketBufferStream();
+            packetBufferStream.Append(packetBuffer, 0, dataBuffer.GetLength(0));
             packetBufferStream.Write(dataBuffer, 0, dataBuffer.GetLength(0));
-            Assert.IsTrue(packetBufferStream.Length > 0);
+            //Assert.IsTrue(packetBufferStream.Length > 0);
 
             // after data has been written, we have to seek to the beginning of the stream
             packetBufferStream.Seek(0, System.IO.SeekOrigin.Begin);
 
             // it's better to initialize header using header parser
             RtmpChunkHeader hdr = RtmpChunkHeader.Decode(packetBufferStream);
+            Assert.IsNotNull(hdr);
 
             // if you want to initialize header manually then you have to move the stream to the position after the header
             //RtmpChunkHeader hdr = new RtmpChunkHeader();
