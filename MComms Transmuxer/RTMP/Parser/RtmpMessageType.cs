@@ -43,7 +43,10 @@
         ProtoControlSetPeerBandwidth, // 0x06
         Audio, // 0x08
         Video, // 0x09
-        Data, // 0x12 (AMF0)
+        // 0x12 (AMF0):
+        DataMetadata,
+        DataTimestamp,
+        DataUnsupported,
         SharedObject, // 0x13 (AMF0)
         // 0x14 (AMF0):
         CommandNetConnectionConnect,

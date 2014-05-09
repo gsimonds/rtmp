@@ -158,7 +158,7 @@ namespace MComms_TransmuxerTests
 		}
 
 		/// <summary>
-		///A test for ToPacketBuffer
+		///A test for ToRtmpChunk
 		///</summary>
 		[TestMethod()]
 		public void ToPacketBufferTest()
@@ -166,7 +166,7 @@ namespace MComms_TransmuxerTests
 			RtmpHandshake target = new RtmpHandshake(); // TODO: Initialize to an appropriate value
 			PacketBuffer expected = null; // TODO: Initialize to an appropriate value
 			PacketBuffer actual;
-			actual = target.ToPacketBuffer();
+			actual = target.ToRtmpChunk();
 			Assert.AreEqual(expected, actual);
 			Assert.Inconclusive("Verify the correctness of this test method.");
 		}

@@ -155,7 +155,7 @@
 
         public void Encode(RtmpMessage msg)
         {
-            this.outputQueue.Add(msg.ToPacketBuffer());
+            this.outputQueue.Add(msg.ToRtmpChunk());
         }
 
         public PacketBuffer GetSendPacket()

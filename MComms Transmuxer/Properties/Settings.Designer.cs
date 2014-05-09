@@ -12,7 +12,7 @@ namespace MComms_Transmuxer.Properties {
     
     
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "12.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "10.0.0.0")]
     internal sealed partial class Settings : global::System.Configuration.ApplicationSettingsBase {
         
         private static Settings defaultInstance = ((Settings)(global::System.Configuration.ApplicationSettingsBase.Synchronized(new Settings())));
@@ -29,6 +29,66 @@ namespace MComms_Transmuxer.Properties {
         public int RtmpPort {
             get {
                 return ((int)(this["RtmpPort"]));
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("http://192.168.0.102/")]
+        public string PublishingRoot {
+            get {
+                return ((string)(this["PublishingRoot"]));
+            }
+            set {
+                this["PublishingRoot"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("D:\\AVTest\\")]
+        public string FlvSaveFolder {
+            get {
+                return ((string)(this["FlvSaveFolder"]));
+            }
+            set {
+                this["FlvSaveFolder"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("andy")]
+        public string IisMediaRestApiUserId {
+            get {
+                return ((string)(this["IisMediaRestApiUserId"]));
+            }
+            set {
+                this["IisMediaRestApiUserId"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string IisMediaRestApiUserPwd {
+            get {
+                return ((string)(this["IisMediaRestApiUserPwd"]));
+            }
+            set {
+                this["IisMediaRestApiUserPwd"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("(?<modifier>\\d+)$")]
+        public string PublishNamePattern {
+            get {
+                return ((string)(this["PublishNamePattern"]));
+            }
+            set {
+                this["PublishNamePattern"] = value;
             }
         }
     }

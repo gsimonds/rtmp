@@ -26,6 +26,7 @@
             this.EventType = eventType;
             this.TargetMessageStreamId = targetMessageStreamId;
             this.MessageType = RtmpIntMessageType.ProtoControlUserControl;
+            this.OrigMessageType = RtmpMessageType.UserControl;
         }
 
         public RtmpMessageUserControl(EventTypes eventType, int targetMessageStreamId, uint bufferLength)
@@ -34,6 +35,7 @@
             this.TargetMessageStreamId = targetMessageStreamId;
             this.BufferLength = bufferLength;
             this.MessageType = RtmpIntMessageType.ProtoControlUserControl;
+            this.OrigMessageType = RtmpMessageType.UserControl;
         }
 
         public RtmpMessageUserControl(EventTypes eventType, uint timestamp)
@@ -41,6 +43,7 @@
             this.EventType = eventType;
             this.PingTimestamp = timestamp;
             this.MessageType = RtmpIntMessageType.ProtoControlUserControl;
+            this.OrigMessageType = RtmpMessageType.UserControl;
         }
 
         public EventTypes EventType { get; set; }
@@ -51,7 +54,7 @@
 
         public uint PingTimestamp { get; set; }
 
-        public override PacketBuffer ToPacketBuffer()
+        public override PacketBuffer ToRtmpChunk()
         {
             // we need only one chunk for this message
             int messageLength = 6;

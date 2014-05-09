@@ -26,10 +26,10 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
+    <PlatformTarget>x86</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>..\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -43,7 +43,9 @@
       <HintPath>..\3rdParty\Log4Net\log4net.dll</HintPath>
     </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Configuration.Install" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Management" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -67,11 +69,20 @@
     <Compile Include="Common\MediaType.cs" />
     <Compile Include="Common\PacketBufferStream.cs" />
     <Compile Include="Global.cs" />
+    <Compile Include="ProjectInstaller.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="ProjectInstaller.Designer.cs">
+      <DependentUpon>ProjectInstaller.cs</DependentUpon>
+    </Compile>
     <Compile Include="Properties\Settings.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
+    <Compile Include="RTMP\Parser\EndianBinaryWriterAmfExtension.cs" />
+    <Compile Include="RTMP\Parser\FlvFileHeader.cs" />
+    <Compile Include="RTMP\Parser\FlvTagHeader.cs" />
     <Compile Include="RTMP\Parser\RtmpAmf0Types.cs" />
     <Compile Include="RTMP\Parser\RtmpAmfNull.cs" />
     <Compile Include="RTMP\Parser\RtmpAmfObject.cs" />
@@ -97,9 +108,9 @@
     <Compile Include="RTMP\RtmpServer.cs" />
     <Compile Include="RTMP\RtmpSession.cs" />
     <Compile Include="RTMP\RtmpSessionState.cs" />
-    <Compile Include="SmoothStreaming\SmoothStreamingController.cs" />
     <Compile Include="SmoothStreaming\SmoothStreamingPublisher.cs" />
     <Compile Include="SmoothStreaming\SmoothStreamingSegmenter.cs" />
+    <Compile Include="Statistics.cs" />
     <Compile Include="TransmuxerService.cs">
       <SubType>Component</SubType>
     </Compile>

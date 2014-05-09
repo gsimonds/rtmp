@@ -642,6 +642,11 @@ namespace MComms_Transmuxer.Common
             CopyBytes(value, 4, buffer, index);
         }
 
+        public void CopyBytes(uint value, byte[] buffer, int index, int byteCount)
+        {
+            CopyBytes(value, byteCount, buffer, index);
+        }
+
         /// <summary>
         /// Copies the specified 64-bit unsigned integer value into the specified byte array,
         /// beginning at the specified index.

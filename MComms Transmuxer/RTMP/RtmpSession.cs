@@ -8,6 +8,7 @@
     using System.Net;
     using System.Runtime.InteropServices;
     using System.Text;
+    using System.Text.RegularExpressions;
     using System.Threading;
     using System.Threading.Tasks;
 
@@ -479,7 +480,7 @@
                         }
 
                         // release all message streams if any
-                        this.ReleaseMessageStreams();
+                        //this.ReleaseMessageStreams();
 
                         Global.Log.DebugFormat("Received command {0}", msg.MessageType);
                         break;
@@ -540,7 +541,7 @@
 
                         RtmpMessageCommand recvComm = (RtmpMessageCommand)msg;
 
-                        Global.Log.DebugFormat("Received command {0}", msg.MessageType);
+                        Global.Log.DebugFormat("Received command {0}, message stream {1}", msg.MessageType, msg.MessageStreamId);
 
                         // register new message stream
                         this.parser.RegisterMessageStream(this.messageStreamCounter);
@@ -653,16 +654,32 @@
                             break;
                         }
 
-                        string publishName = (string)recvComm.Parameters[1];
+                        string fullPublishName = (string)recvComm.Parameters[1];
 
                         // remove query part from the publish name
-                        int queryPos = publishName.IndexOf('?');
+                        int queryPos = fullPublishName.IndexOf('?');
                         if (queryPos >= 0)
                         {
-                            publishName = publishName.Substring(0, queryPos);
+                            fullPublishName = fullPublishName.Substring(0, queryPos);
+                        }
+
+                        string publishName = fullPublishName;
+
+                        try
+                        {
+                            Regex rg = new Regex(Properties.Settings.Default.PublishNamePattern);
+                            Match m = rg.Match(fullPublishName);
+                            if (m.Success && m.Groups["modifier"].Success)
+                            {
+                                publishName = fullPublishName.Substring(0, fullPublishName.Length - m.Groups["modifier"].Value.Length);
+                            }
+                        }
+                        catch
+                        {
                         }
 
                         messageStream.PublishName = publishName;
+                        messageStream.FullPublishName = fullPublishName;
                         messageStream.Publishing = true; // creating segmenter
 
                         // prepare reply
@@ -679,7 +696,7 @@
                             RtmpAmfObject amf = new RtmpAmfObject();
                             amf.Strings.Add("level", "status");
                             amf.Strings.Add("code", "NetStream.Publish.Start");
-                            amf.Strings.Add("description", "Publishing " + messageStream.PublishName);
+                            amf.Strings.Add("description", "Publishing " + messageStream.FullPublishName);
                             amf.Numbers.Add("clientId", this.sessionId);
                             pars.Add(amf);
 
@@ -741,12 +758,12 @@
                         }
 
                         // close IIS connection and release segmenter
-                        foreach (RtmpMessageStream messageStream in messageStreams.Values)
+                        foreach (RtmpMessageStream messageStream in this.messageStreams.Values)
                         {
-                            if (messageStream.PublishName == publishName)
+                            if (messageStream.FullPublishName == publishName)
                             {
                                 messageStream.Publishing = false;
-                                Global.Log.DebugFormat("Unpublished message stream {0}, publish name {1}", messageStream.MessageStreamId, messageStream.PublishName);
+                                Global.Log.DebugFormat("Unpublished message stream {0}, publish name {1}", messageStream.MessageStreamId, messageStream.FullPublishName);
                             }
                         }
 
@@ -805,9 +822,9 @@
 
                         // this is a redundant command, it could follow FCUnpublish
                         // just in case reset publising flag one more time
-                        if (messageStreams.ContainsKey(msg.MessageStreamId))
+                        if (this.messageStreams.ContainsKey(msg.MessageStreamId))
                         {
-                            messageStreams[msg.MessageStreamId].Publishing = false;
+                            this.messageStreams[msg.MessageStreamId].Publishing = false;
                             Global.Log.DebugFormat("Closed message stream {0}", msg.MessageStreamId);
                         }
 
@@ -837,17 +854,18 @@
                         Global.Log.DebugFormat("Received command {0}", msg.MessageType);
 
                         int messageStreamId = (int)(double)recvComm.Parameters[1];
-                        if (messageStreams.ContainsKey(messageStreamId))
+                        if (this.messageStreams.ContainsKey(messageStreamId))
                         {
-                            messageStreams[messageStreamId].Dispose();
-                            messageStreams.Remove(messageStreamId);
+                            this.messageStreams[messageStreamId].Dispose();
+                            this.messageStreams.Remove(messageStreamId);
                             Global.Log.DebugFormat("Deleted message stream {0}", messageStreamId);
                         }
 
                         break;
                     }
 
-                case RtmpIntMessageType.Data:
+                case RtmpIntMessageType.DataMetadata:
+                case RtmpIntMessageType.DataTimestamp:
                     {
                         if (this.state != RtmpSessionState.Receiving)
                         {
@@ -870,7 +888,10 @@
                             break;
                         }
 
-                        Global.Log.DebugFormat("Received command {0}", msg.MessageType);
+                        if (msg.MessageType == RtmpIntMessageType.DataMetadata)
+                        {
+                            Global.Log.DebugFormat("Received command {0}", msg.MessageType);
+                        }
 
                         try
                         {
@@ -950,12 +971,12 @@
 
         private void ReleaseMessageStreams()
         {
-            foreach (RtmpMessageStream messageStream in messageStreams.Values)
+            foreach (RtmpMessageStream messageStream in this.messageStreams.Values)
             {
                 messageStream.Dispose();
             }
 
-            messageStreams.Clear();
+            this.messageStreams.Clear();
         }
     }
 }

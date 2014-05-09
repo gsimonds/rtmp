@@ -16,6 +16,7 @@
         {
             this.ChunkSize = chunkSize;
             this.MessageType = RtmpIntMessageType.ProtoControlSetChunkSize;
+            this.OrigMessageType = RtmpMessageType.SetChunkSize;
         }
 
         public uint ChunkSize
@@ -31,7 +32,7 @@
             }
         }
 
-        public override PacketBuffer ToPacketBuffer()
+        public override PacketBuffer ToRtmpChunk()
         {
             // we need only one chunk for this message
             RtmpChunkHeader hdr = new RtmpChunkHeader

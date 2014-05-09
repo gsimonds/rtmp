@@ -17,13 +17,20 @@
 
         public uint ChunkStreamId { get; set; }
 
+        public RtmpMessageType OrigMessageType { get; set; }
+
         public RtmpIntMessageType MessageType { get; set; }
 
         public int MessageStreamId { get; set; }
 
         public long Timestamp { get; set; }
 
-        public virtual PacketBuffer ToPacketBuffer()
+        public virtual PacketBuffer ToRtmpChunk()
+        {
+            return null;
+        }
+
+        public virtual PacketBuffer ToFlvTag()
         {
             return null;
         }

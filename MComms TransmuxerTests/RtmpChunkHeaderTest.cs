@@ -90,7 +90,7 @@ namespace MComms_TransmuxerTests
 		}
 
 		/// <summary>
-		///A test for ToPacketBuffer
+		///A test for ToRtmpChunk
 		///</summary>
 		[TestMethod()]
 		public void ToPacketBufferTest()
@@ -105,7 +105,7 @@ namespace MComms_TransmuxerTests
 		}
 
 		/// <summary>
-		///A test for ToPacketBuffer
+		///A test for ToRtmpChunk
 		///</summary>
 		[TestMethod()]
 		public void ToPacketBufferTest1()

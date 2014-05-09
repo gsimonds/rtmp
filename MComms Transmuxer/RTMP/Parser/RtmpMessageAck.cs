@@ -13,12 +13,13 @@
         public RtmpMessageAck(uint receivedBytes)
         {
             this.ReceivedBytes = receivedBytes;
+            this.OrigMessageType = RtmpMessageType.Aknowledgement;
             this.MessageType = RtmpIntMessageType.ProtoControlAknowledgement;
         }
 
         public uint ReceivedBytes { get; set; }
 
-        public override PacketBuffer ToPacketBuffer()
+        public override PacketBuffer ToRtmpChunk()
         {
             // we need only one chunk for this message
             RtmpChunkHeader hdr = new RtmpChunkHeader

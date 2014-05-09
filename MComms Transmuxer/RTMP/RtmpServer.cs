@@ -9,6 +9,7 @@
     using System.Threading.Tasks;
 
     using MComms_Transmuxer.Common;
+    using MComms_Transmuxer.SmoothStreaming;
     using MComms_Transmuxer.Transport;
 
     public class RtmpServer
@@ -18,6 +19,11 @@
         private Thread controlThread = null;
         private Dictionary<IPEndPoint, RtmpSession> sessions = new Dictionary<IPEndPoint, RtmpSession>();
         private long sessionCounter = 0;
+
+        private Statistics stat = new Statistics();
+        private DateTime lastStatCollected = DateTime.MinValue;
+        private volatile int statNumberOfConnections = 0;
+        private volatile int statTotalBandwidth = 0;
 
         public RtmpServer()
         {
@@ -38,6 +44,8 @@
             this.transport.ReceiveBufferSize = Global.TransportBufferSize;
             this.transport.SendBufferSize = Global.TransportBufferSize;
 
+            this.stat.InitStats();
+
             this.controlThread = new Thread(this.ControlThreadProc);
         }
 
@@ -55,6 +63,9 @@
 
             this.isRunning = false;
             this.controlThread.Join();
+
+            // clean up publishing points
+            SmoothStreamingPublisher.DeleteAll();
         }
 
         private void ControlThreadProc()
@@ -63,7 +74,13 @@
 
             while (this.isRunning)
             {
-                // TODO: do we need this thread?
+                if ((DateTime.Now - this.lastStatCollected).TotalMilliseconds >= 1000)
+                {
+                    this.stat.CollectNetworkInfo(this.statNumberOfConnections, this.statTotalBandwidth * 8);
+                    this.statTotalBandwidth = 0;
+                    this.lastStatCollected = DateTime.Now;
+                }
+
                 Thread.Sleep(1);
             }
         }
@@ -81,6 +98,7 @@
 
                 RtmpSession session = new RtmpSession(++this.sessionCounter, this.transport, e.EndPoint);
                 sessions.Add(e.EndPoint, session);
+                this.statNumberOfConnections = sessions.Count;
             }
         }
 
@@ -97,6 +115,7 @@
 
                 sessions[e.EndPoint].Dispose();
                 sessions.Remove(e.EndPoint);
+                this.statNumberOfConnections = sessions.Count;
             }
         }
 
@@ -111,6 +130,7 @@
                     return;
                 }
 
+                this.statTotalBandwidth += e.Packet.ActualBufferSize;
                 sessions[e.EndPoint].OnReceive(e.Packet);
             }
         }

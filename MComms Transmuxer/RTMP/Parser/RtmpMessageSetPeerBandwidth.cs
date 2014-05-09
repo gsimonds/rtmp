@@ -21,14 +21,15 @@
         {
             this.AckSize = ackSize;
             this.LimitType = limitType;
-            this.MessageType = RtmpIntMessageType.ProtoControlAbort;
+            this.MessageType = RtmpIntMessageType.ProtoControlSetPeerBandwidth;
+            this.OrigMessageType = RtmpMessageType.SetPeerBandwidth;
         }
 
         public uint AckSize { get; set; }
 
         public LimitTypes LimitType { get; set; }
 
-        public override PacketBuffer ToPacketBuffer()
+        public override PacketBuffer ToRtmpChunk()
         {
             // we need only one chunk for this message
             RtmpChunkHeader hdr = new RtmpChunkHeader

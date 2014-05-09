@@ -12,6 +12,7 @@
     {
         public RtmpMessageCommand(string commandName, int transactionId, List<object> parameters)
         {
+            this.OrigMessageType = RtmpMessageType.CommandAmf0;
             this.CommandName = commandName;
             this.TransactionId = transactionId;
             this.Parameters = parameters;
@@ -69,7 +70,7 @@
 
         public List<object> Parameters { get; set; }
 
-        public override PacketBuffer ToPacketBuffer()
+        public override PacketBuffer ToRtmpChunk()
         {
             // TODO: add chunk size check
             RtmpChunkHeader hdr = new RtmpChunkHeader
@@ -84,6 +85,17 @@
             int hdrSize = hdr.HeaderSize;
             int totalSize = 0;
 
+            PacketBuffer packet = this.createBody(hdrSize, ref totalSize);
+
+            hdr.MessageLength = totalSize - hdrSize;
+            hdr.ToPacketBuffer(packet);
+            packet.ActualBufferSize = totalSize;
+
+            return packet;
+        }
+
+        private PacketBuffer createBody(int hdrSize, ref int totalSize)
+        {
             PacketBuffer packet = Global.Allocator.LockBuffer();
             // we'll set real value in the end
             packet.ActualBufferSize = packet.Size;
@@ -94,108 +106,14 @@
                 writer.BaseStream.Seek(hdrSize, System.IO.SeekOrigin.Begin);
 
                 // write AMF0 data
-                this.WriteString(writer, this.CommandName);
-                this.WriteNumber(writer, this.TransactionId);
-
-                foreach (object obj in this.Parameters)
-                {
-                    Type objType = obj.GetType();
-                    if (objType == typeof(double))
-                    {
-                        this.WriteNumber(writer, (double)obj);
-                    }
-                    else if (objType == typeof(bool))
-                    {
-                        this.WriteBoolean(writer, (bool)obj);
-                    }
-                    else if (objType == typeof(string))
-                    {
-                        this.WriteString(writer, (string)obj);
-                    }
-                    else if (objType == typeof(RtmpAmfNull))
-                    {
-                        this.WriteNull(writer);
-                    }
-                    else if (objType == typeof(RtmpAmfObject))
-                    {
-                        this.WriteObject(writer, (RtmpAmfObject)obj);
-                    }
-                }
+                writer.WriteAmf0(this.CommandName);
+                writer.WriteAmf0(this.TransactionId);
+                writer.WriteAmf0(this.Parameters);
 
                 totalSize = (int)writer.BaseStream.Position;
             }
 
-            hdr.MessageLength = totalSize - hdrSize;
-            hdr.ToPacketBuffer(packet);
-            packet.ActualBufferSize = totalSize;
-
             return packet;
-        }
-
-        private void WriteNumber(EndianBinaryWriter writer, double number)
-        {
-            writer.Write((byte)RtmpAmf0Types.Number);
-            writer.Write(number);
-        }
-
-        private void WriteBoolean(EndianBinaryWriter writer, bool boolean)
-        {
-            writer.Write((byte)RtmpAmf0Types.Boolean);
-            writer.Write(boolean);
-        }
-
-        private void WriteString(EndianBinaryWriter writer, string str, bool objectStart = false)
-        {
-            if (objectStart == false)
-            {
-                writer.Write((byte)RtmpAmf0Types.String);
-            }
-
-            byte[] utf8 = System.Text.Encoding.UTF8.GetBytes(str);
-            writer.Write((ushort)utf8.Length);
-            writer.Write(utf8);
-        }
-
-        private void WriteNull(EndianBinaryWriter writer)
-        {
-            writer.Write((byte)RtmpAmf0Types.Null);
-        }
-
-        private void WriteObject(EndianBinaryWriter writer, RtmpAmfObject amfObject, bool isArray = false)
-        {
-            if (!isArray)
-            {
-                writer.Write((byte)RtmpAmf0Types.Object);
-            }
-            else
-            {
-                // TODO: test
-                writer.Write((byte)RtmpAmf0Types.Array);
-                writer.Write((int)(amfObject.Booleans.Count + amfObject.Numbers.Count + amfObject.Strings.Count + amfObject.Nulls));
-            }
-
-            foreach (var s in amfObject.Strings)
-            {
-                WriteString(writer, s.Key, true);
-                WriteString(writer, s.Value);
-            }
-
-            foreach (var s in amfObject.Numbers)
-            {
-                WriteString(writer, s.Key, true);
-                WriteNumber(writer, s.Value);
-            }
-
-            foreach (var s in amfObject.Booleans)
-            {
-                WriteString(writer, s.Key, true);
-                WriteBoolean(writer, s.Value);
-            }
-
-            //objects end with 0x00,0x00, (oject end identifier [0x09 in this case])
-            writer.Write((byte)0x00);
-            writer.Write((byte)0x00);
-            writer.Write((byte)RtmpAmf0Types.ObjectEnd);
         }
     }
 }

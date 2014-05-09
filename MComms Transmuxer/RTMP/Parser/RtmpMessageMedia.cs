@@ -13,6 +13,7 @@
         public RtmpMessageMedia(RtmpVideoCodec videoCodec, RtmpMediaPacketType packetType, int decoderDelay, bool keyFrame)
         {
             this.MessageType = RtmpIntMessageType.Video;
+            this.OrigMessageType = RtmpMessageType.Video;
             this.ContentType = MediaContentType.Video;
             this.PacketType = packetType;
             this.DecoderDelay = decoderDelay;
@@ -24,6 +25,7 @@
         public RtmpMessageMedia(RtmpAudioCodec audioCodec, RtmpMediaPacketType packetType, int sampleRate, int sampleSize, int channels)
         {
             this.MessageType = RtmpIntMessageType.Audio;
+            this.OrigMessageType = RtmpMessageType.Audio;
             this.ContentType = MediaContentType.Audio;
             this.PacketType = packetType;
             this.MediaDataOffset = 2; // RTMP media packet header: 1 byte, packet type: 1 byte

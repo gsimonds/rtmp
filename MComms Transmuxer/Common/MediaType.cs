@@ -39,5 +39,17 @@
         public int Channels { get; set; }
 
         public int SampleSize { get; set; }
+
+        public bool IsPrivateDataEqual(byte[] privateData)
+        {
+            if (this.PrivateData == null && privateData == null) return true;
+            if (this.PrivateData == null || privateData == null) return false;
+            if (this.PrivateData.Length != privateData.Length) return false;
+            for (int i = 0; i < this.PrivateData.Length; ++i)
+            {
+                if (this.PrivateData[i] != privateData[i]) return false;
+            }
+            return true;
+        }
     }
 }

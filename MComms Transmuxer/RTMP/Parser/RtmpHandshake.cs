@@ -148,7 +148,7 @@
             return true;
         }
 
-        public override PacketBuffer ToPacketBuffer()
+        public override PacketBuffer ToRtmpChunk()
         {
             PacketBuffer packet = null;
 

@@ -50,7 +50,7 @@
             }
             else
             {
-                Global.Log.Debug("MComms Transmuxer service started in UI mode");
+                Global.Log.Debug("MComms Transmuxer started in service mode");
                 ServiceBase[] ServicesToRun;
                 ServicesToRun = new ServiceBase[] 
                 { 

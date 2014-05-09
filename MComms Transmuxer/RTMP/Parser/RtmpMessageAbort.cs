@@ -13,12 +13,13 @@
         public RtmpMessageAbort(int targetChunkStreamId)
         {
             this.TargetChunkStreamId = targetChunkStreamId;
+            this.OrigMessageType = RtmpMessageType.Abort;
             this.MessageType = RtmpIntMessageType.ProtoControlAbort;
         }
 
         public int TargetChunkStreamId { get; set; }
 
-        public override PacketBuffer ToPacketBuffer()
+        public override PacketBuffer ToRtmpChunk()
         {
             // we need only one chunk for this message
             RtmpChunkHeader hdr = new RtmpChunkHeader

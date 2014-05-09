@@ -14,18 +14,20 @@
     // TODO: 32/64bit dlls
     public class SmoothStreamingSegmenter : IDisposable
     {
-        private int muxId = -1;
         private IntPtr mediaDataPtr = IntPtr.Zero;
         private int mediaDataPtrSize = 0;
         private string publishUri = null;
         private SmoothStreamingPublisher publisher = null;
+        private Dictionary<Guid, int> publishStreamId2MuxerStreamId = new Dictionary<Guid, int>();
+        private bool synchronized = false;
+        private long timestampOffset = 0;
 
         public SmoothStreamingSegmenter(string publishUri)
         {
-            this.muxId = SmoothStreamingSegmenter.MCSSF_Initialize();
             this.mediaDataPtrSize = Global.MediaAllocator.BufferSize;
             this.mediaDataPtr = Marshal.AllocHGlobal(this.mediaDataPtrSize);
             this.publishUri = publishUri;
+            this.publisher = SmoothStreamingPublisher.Create(this.publishUri);
         }
 
         #region IDisposable
@@ -35,18 +37,6 @@
         /// </summary>
         public void Dispose()
         {
-            if (this.publisher != null)
-            {
-                this.publisher.Dispose();
-                this.publisher = null;
-            }
-
-            if (this.muxId >= 0)
-            {
-                SmoothStreamingSegmenter.MCSSF_Uninitialize(this.muxId);
-                this.muxId = -1;
-            }
-
             if (this.mediaDataPtr != IntPtr.Zero)
             {
                 Marshal.FreeHGlobal(this.mediaDataPtr);
@@ -56,12 +46,16 @@
 
         #endregion
 
-        public int RegisterStream(MediaType mediaType)
+        public Guid RegisterStream(MediaType mediaType)
         {
             int streamId = -1;
 
+            Guid publishStreamId = Guid.Empty;
+
             if (mediaType.ContentType == MediaContentType.Video)
             {
+                publishStreamId = this.publisher.RegisterMediaType(mediaType);
+
                 SmoothStreamingSegmenter.MPEG2VIDEOINFO mvih = new SmoothStreamingSegmenter.MPEG2VIDEOINFO();
                 mvih.hdr.rcSource = new SmoothStreamingSegmenter.RECT { right = mediaType.Width, bottom = mediaType.Height };
                 mvih.hdr.rcTarget = new SmoothStreamingSegmenter.RECT { right = mediaType.Width, bottom = mediaType.Height };
@@ -137,10 +131,12 @@
                 IntPtr extraDataPtr = IntPtr.Add(this.mediaDataPtr, Marshal.SizeOf(mvih) - 4); // TODO: research this 4 byte diff
                 Marshal.Copy(privateData, 0, extraDataPtr, privateDataSize);
 
-                streamId = SmoothStreamingSegmenter.MCSSF_AddStream(this.muxId, 2 /* video */, mediaType.Bitrate, 0, totalDataSize - 4, this.mediaDataPtr);
+                streamId = this.publisher.AddStream(publishStreamId, 2 /* video */, mediaType.Bitrate, 0, totalDataSize - 4, this.mediaDataPtr);
             }
             else if (mediaType.ContentType == MediaContentType.Audio)
             {
+                publishStreamId = this.publisher.RegisterMediaType(mediaType);
+
                 WAVEFORMATEX wfx = new WAVEFORMATEX();
                 wfx.wFormatTag = 0x00FF; // AAC
                 wfx.nChannels = (ushort)mediaType.Channels;
@@ -155,7 +151,7 @@
                 IntPtr extraDataPtr = IntPtr.Add(this.mediaDataPtr, Marshal.SizeOf(wfx) - 2);
                 Marshal.Copy(mediaType.PrivateData, 0, extraDataPtr, mediaType.PrivateData.Length);
 
-                streamId = SmoothStreamingSegmenter.MCSSF_AddStream(this.muxId, 1 /* audio */, mediaType.Bitrate, 0, totalDataSize - 2, this.mediaDataPtr);
+                streamId = this.publisher.AddStream(publishStreamId, 1 /* audio */, mediaType.Bitrate, 0, totalDataSize - 2, this.mediaDataPtr);
             }
             else
             {
@@ -167,58 +163,50 @@
                 throw new CriticalStreamException(string.Format("MCSSF_AddStream failed {0}", streamId));
             }
 
-            return streamId;
+            if (this.publishStreamId2MuxerStreamId.ContainsKey(publishStreamId))
+            {
+                this.publishStreamId2MuxerStreamId[publishStreamId] = streamId;
+            }
+            else
+            {
+                this.publishStreamId2MuxerStreamId.Add(publishStreamId, streamId);
+            }
+
+            return publishStreamId;
         }
 
-        public void PushHeader(int streamId)
+        public void PushMediaData(Guid publishStreamId, DateTime absoluteTime, long timestamp, bool keyFrame, byte[] buffer, int offset, int length)
         {
-            int headerSize = 0;
-            IntPtr headerPtr = IntPtr.Zero;
-            int res = SmoothStreamingSegmenter.MCSSF_GetHeader(this.muxId, streamId, out headerSize, out headerPtr);
-            if (res < 0)
+            int muxId = -1;
+            do
             {
-                throw new CriticalStreamException(string.Format("MCSSF_GetHeader failed {0}", res));
-            }
-
-            if (headerSize > Global.MediaAllocator.BufferSize)
-            {
-                // increase buffer sizes
-                Global.MediaAllocator.Reallocate(headerSize * 3 / 2, Global.MediaAllocator.BufferCount);
-            }
-
-            PacketBuffer header = Global.MediaAllocator.LockBuffer();
-            Marshal.Copy(headerPtr, header.Buffer, 0, headerSize);
-            header.ActualBufferSize = headerSize;
-
-            //PacketBuffer tmp = Global.MediaAllocator.LockBuffer();
-            //Marshal.Copy(headerPtr, tmp.Buffer, 0, headerSize);
-
-            try
-            {
-                //this.CorrectHeader(tmp, header, streamId, mediaType);
-                if (header.ActualBufferSize > 0)
+                muxId = this.publisher.GetMuxId(publishStreamId);
+                if (muxId < 0)
                 {
-                    if (this.publisher == null)
-                    {
-                        this.publisher = new SmoothStreamingPublisher(this.publishUri);
-                    }
-
-                    publisher.PushData(streamId, header.Buffer, 0, header.ActualBufferSize);
+                    // stream re-registration necessary (eg added another bitrate)
+                    this.RegisterStream(this.publisher.GetMediaType(publishStreamId));
                 }
             }
-            catch
+            while (muxId < 0);
+
+            if (!this.synchronized)
             {
-                //tmp.Release();
-                header.Release();
-                throw;
+                DateTime lastAbsoluteTime = DateTime.MinValue;
+                long lastTimestamp = long.MinValue;
+                this.publisher.GetSynchronizationInfo(out lastAbsoluteTime, out lastTimestamp);
+
+                if (lastTimestamp > long.MinValue)
+                {
+                    // this is a continuation of previously connected stream
+                    this.timestampOffset = (absoluteTime - lastAbsoluteTime).Ticks + lastTimestamp - timestamp;
+                    Global.Log.DebugFormat("Re-sync after disconnection: offset {0}, last absolute {1:yy-MM-dd HH:mm:ss.fff}, last timestamp {2}, cur absolute {3:yy-MM-dd HH:mm:ss.fff}, cur timestamp {4}", this.timestampOffset, lastAbsoluteTime, lastTimestamp, absoluteTime, timestamp);
+                }
+
+                this.synchronized = true;
             }
 
-            //tmp.Release();
-            header.Release();
-        }
+            long adjustedTimestamp = timestamp + this.timestampOffset;
 
-        public void PushMediaData(int streamId, long timestamp, bool keyFrame, byte[] buffer, int offset, int length)
-        {
             if (this.mediaDataPtrSize < length)
             {
                 Marshal.FreeHGlobal(this.mediaDataPtr);
@@ -231,7 +219,7 @@
             int outputDataSize = 0;
             IntPtr outputDataPtr = IntPtr.Zero;
             //Global.Log.DebugFormat("Stream {0}, timestamp {1}, keyframe {2}", streamId, timestamp, keyFrame);
-            int pushResult = SmoothStreamingSegmenter.MCSSF_PushMedia(this.muxId, streamId, timestamp, 0, keyFrame, length, mediaDataPtr, out outputDataSize, out outputDataPtr);
+            int pushResult = SmoothStreamingSegmenter.MCSSF_PushMedia(muxId, this.publishStreamId2MuxerStreamId[publishStreamId], adjustedTimestamp, 0, keyFrame, length, mediaDataPtr, out outputDataSize, out outputDataPtr);
 
             if (pushResult < 0)
             {
@@ -250,7 +238,8 @@
 
                 try
                 {
-                    publisher.PushData(streamId, segment.Buffer, 0, outputDataSize);
+                    // TODO: start from key frame
+                    publisher.PushData(publishStreamId, absoluteTime, adjustedTimestamp, segment.Buffer, 0, outputDataSize);
                 }
                 catch
                 {
@@ -259,6 +248,15 @@
                 }
 
                 segment.Release();
+            }
+        }
+
+        public void AdjustAbsoluteTime(long gap)
+        {
+            if (this.timestampOffset != 0)
+            {
+                this.timestampOffset += gap;
+                Global.Log.DebugFormat("Re-sync after absolute time adjustment: new offset {0}", this.timestampOffset);
             }
         }
 
@@ -616,10 +614,10 @@
         }
 
         [DllImport("MCommsSSFSDK.dll", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int MCSSF_Initialize();
+        public static extern int MCSSF_Initialize();
 
         [DllImport("MCommsSSFSDK.dll", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int MCSSF_AddStream(
+        public static extern int MCSSF_AddStream(
             [In] Int32 muxId,
             [In] Int32 streamType,
             [In] Int32 bitrate,
@@ -628,7 +626,7 @@
             [In] IntPtr extraData);
 
         [DllImport("MCommsSSFSDK.dll", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int MCSSF_GetHeader(
+        public static extern int MCSSF_GetHeader(
             [In] Int32 muxId,
             [In] Int32 streamId,
             [Out] out Int32 dataSize,
@@ -654,7 +652,7 @@
             [Out] out IntPtr data);
 
         [DllImport("MCommsSSFSDK.dll", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int MCSSF_Uninitialize([In] Int32 muxId);
+        public static extern int MCSSF_Uninitialize([In] Int32 muxId);
 
         #endregion
     }

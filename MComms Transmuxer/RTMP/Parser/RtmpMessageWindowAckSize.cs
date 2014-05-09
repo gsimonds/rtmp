@@ -14,11 +14,12 @@
         {
             this.AckSize = ackSize;
             this.MessageType = RtmpIntMessageType.ProtoControlWindowAknowledgementSize;
+            this.OrigMessageType = RtmpMessageType.WindowAknowledgementSize;
         }
 
         public uint AckSize { get; set; }
 
-        public override PacketBuffer ToPacketBuffer()
+        public override PacketBuffer ToRtmpChunk()
         {
             // we need only one chunk for this message
             RtmpChunkHeader hdr = new RtmpChunkHeader
