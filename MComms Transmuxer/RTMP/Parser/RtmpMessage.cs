@@ -197,7 +197,7 @@
                         }
                         else
                         {
-                            msgMedia.MediaData = Global.MediaAllocator.LockBuffer();
+                            msgMedia.MediaData = hdr.MessageLength > Global.Allocator.BufferSize ? Global.MediaAllocator.LockBuffer() : Global.Allocator.LockBuffer();
                             msgMedia.MediaData.ActualBufferSize = hdr.MessageLength;
                             dataStream.Seek(messageStart, System.IO.SeekOrigin.Begin);
                             dataStream.Read(msgMedia.MediaData.Buffer, 0, hdr.MessageLength);

@@ -108,13 +108,13 @@
             try
             {
                 StackFrame sf = st.GetFrame(2);
-                string s = sf.GetMethod().Name;
-                if (s == "LockBuffer")
+                System.Reflection.MethodBase method = sf.GetMethod();
+                if (method.Name == "LockBuffer")
                 {
                     sf = st.GetFrame(3);
-                    s = sf.GetMethod().Name;
+                    method = sf.GetMethod();
                 }
-                return s;
+                return method.DeclaringType.Name + "." + method.Name;
             }
             catch
             {
@@ -141,12 +141,12 @@
             {
                 if (--this.refCount == 0)
                 {
+                    this.allocator.ReleaseBuffer(this);
                     this.CleanUp();
 #if TRACE_PACKET_BUFFERS
                     this.refdBy.Clear();
                     this.releasedBy.Clear();
 #endif
-                    this.allocator.ReleaseBuffer(this);
                 }
 #if TRACE_PACKET_BUFFERS
                 else

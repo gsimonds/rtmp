@@ -17,6 +17,7 @@
         public ClientSendContext(ClientContext obj)
         {
             this.Socket = obj.Socket;
+            this.RemoteEndPoint = obj.RemoteEndPoint;
         }
 
         public PacketBuffer Packet { get; set; }

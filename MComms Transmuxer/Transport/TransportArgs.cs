@@ -12,18 +12,38 @@
     public class TransportArgs : EventArgs
     {
         public TransportArgs(IPEndPoint endPoint) :
-            this(endPoint, null)
+            this(endPoint, null, 0, 0)
         {
+        }
+
+        public TransportArgs(IPEndPoint endPoint, byte[] data, int dataOffset, int dataLength)
+        {
+            this.EndPoint = endPoint;
+            this.Data = data;
+            this.DataOffset = dataOffset;
+            this.DataLength = dataLength;
+            this.Packet = null;
         }
 
         public TransportArgs(IPEndPoint endPoint, PacketBuffer packet)
         {
             this.EndPoint = endPoint;
+            this.Data = null;
+            this.DataOffset = 0;
+            this.DataLength = 0;
             this.Packet = packet;
         }
 
         public IPEndPoint EndPoint { get; set; }
 
+        public byte[] Data { get; set; }
+
+        public int DataOffset { get; set; }
+
+        public int DataLength { get; set; }
+
         public PacketBuffer Packet { get; set; }
+
+        public EventHandler<TransportArgs> ReceiveEventHandler { get; set; }
     }
 }

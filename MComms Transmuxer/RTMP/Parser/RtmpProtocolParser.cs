@@ -128,7 +128,6 @@
                                     this.aligning = true;
                                 }
                                 dataStream.Seek(0, System.IO.SeekOrigin.End);
-                                dataStream.TrimBegin();
                                 break;
                             }
 
@@ -142,10 +141,15 @@
                             msg = this.chunkStreams[hdr.ChunkStreamId].Decode(hdr, this.dataStream, ref canContinue);
 
                             // break the loop if we've parsed complete message or have incomplete chunk
-                            if (msg != null || !canContinue) break;
+                            if (msg != null || !canContinue)
+                            {
+                                break;
+                            }
                         }
                         while (this.dataStream.Position < this.dataStream.Length);
 
+                        // trim everything we've parsed or dropped till current position
+                        dataStream.TrimBegin();
                         break;
                     }
             }

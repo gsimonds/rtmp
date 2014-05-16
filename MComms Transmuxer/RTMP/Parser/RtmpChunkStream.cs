@@ -137,16 +137,13 @@
                 {
                     // can't continue parsing, need to receive more data
                     canContinue = false;
+                    dataStream.Seek(-hdr.HeaderSize, System.IO.SeekOrigin.Current);
                     return null;
                 }
 
                 //Global.Log.DebugFormat("Received message: {0} bytes, type {1}", hdr.MessageLength, hdr.MessageType);
 
                 msg = RtmpMessage.Decode(hdr, dataStream);
-
-                // drop parsed data even if message decoding failed
-                // (which means we don't support something in this message)
-                dataStream.TrimBegin();
             }
             else
             {
@@ -177,6 +174,7 @@
                 {
                     // can't continue parsing, need to receive more data
                     canContinue = false;
+                    dataStream.Seek(-hdr.HeaderSize, System.IO.SeekOrigin.Current);
                     return null;
                 }
 
@@ -184,7 +182,6 @@
 
                 // append received chunk to previous ones
                 dataStream.CopyTo(this.incompleteMessageStream, chunkLength);
-                dataStream.TrimBegin();
 
                 if (this.incompleteMessageStream.Position >= hdr.MessageLength)
                 {

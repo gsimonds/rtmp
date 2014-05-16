@@ -44,12 +44,19 @@
         // returns true if the buffer was successfully set, else false
         internal bool SetBuffer(SocketAsyncEventArgs args, int count = 0)
         {
+            if (args.Buffer != null)
+            {
+                // buffer already set
+                return true;
+            }
+
+            if (count == 0 || count > this.bufferBytesAllocatedForEachSaea)
+            {
+                count = this.bufferBytesAllocatedForEachSaea;
+            }
+
             lock (this)
             {
-                if (count == 0 || count > this.bufferBytesAllocatedForEachSaea)
-                {
-                    count = this.bufferBytesAllocatedForEachSaea;
-                }
                 if (this.freeIndexPool.Count > 0)
                 {
                     //This if-statement is only true if you have called the FreeBuffer

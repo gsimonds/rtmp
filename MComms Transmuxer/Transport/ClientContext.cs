@@ -12,5 +12,6 @@
     {
         public Socket Socket { get; set; }
         public IPEndPoint RemoteEndPoint { get; set; }
+        public EventHandler<TransportArgs> ReceiveEventHandler { get; set; }
     }
 }

@@ -20,5 +20,8 @@
     <Setting Name="PublishNamePattern" Type="System.String" Scope="User">
       <Value Profile="(Default)">(?&lt;modifier&gt;\d+)$</Value>
     </Setting>
+    <Setting Name="EnableFlvDump" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
   </Settings>
 </SettingsFile>

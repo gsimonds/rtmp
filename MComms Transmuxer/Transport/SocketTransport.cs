@@ -362,11 +362,22 @@
             }
         }
 
-        protected virtual void OnReceive(IPEndPoint endPoint, PacketBuffer packet)
+        protected virtual void OnReceive(ClientContext client, IPEndPoint endPoint, byte[] data, int dataOffset, int dataLength)
         {
-            if (this.Received != null)
+            if (client != null && client.ReceiveEventHandler != null)
             {
-                this.Received(this, new TransportArgs(endPoint, packet));
+                // direct call to RTMP session event handler
+                client.ReceiveEventHandler(this, new TransportArgs(endPoint, data, dataOffset, dataLength));
+            }
+            else if (this.Received != null)
+            {
+                TransportArgs args = new TransportArgs(endPoint, data, dataOffset, dataLength);
+                this.Received(this, args);
+                if (args.ReceiveEventHandler != null && client != null)
+                {
+                    // we need to route further receive event to RTMP session directly
+                    client.ReceiveEventHandler = args.ReceiveEventHandler;
+                }
             }
         }
 
@@ -504,9 +515,33 @@
             // limit number of connections
             this.maxConnectionsEnforcer.WaitOne();
 
-            if (!listenSocket.AcceptAsync(asyncContext))
+            try
             {
-                this.ProcessAccept(asyncContext);
+                if (!listenSocket.AcceptAsync(asyncContext))
+                {
+                    this.ProcessAccept(asyncContext);
+                }
+            }
+            catch
+            {
+                // push accept context back to pool
+                if (asyncContext.AcceptSocket != null)
+                {
+                    try
+                    {
+                        asyncContext.AcceptSocket.Close();
+                    }
+                    catch
+                    {
+                    }
+
+                    asyncContext.AcceptSocket = null;
+                }
+
+                lock (this.acceptAsyncContexts)
+                {
+                    this.acceptAsyncContexts.Add(asyncContext);
+                }
             }
         }
 
@@ -517,8 +552,19 @@
             if (!this.isRunning || asyncContext.SocketError != SocketError.Success)
             {
                 // push accept context back to pool
-                asyncContext.AcceptSocket.Close();
-                asyncContext.AcceptSocket = null;
+                if (asyncContext.AcceptSocket != null)
+                {
+                    try
+                    {
+                        asyncContext.AcceptSocket.Close();
+                    }
+                    catch
+                    {
+                    }
+
+                    asyncContext.AcceptSocket = null;
+                }
+
                 lock (this.acceptAsyncContexts)
                 {
                     this.acceptAsyncContexts.Add(asyncContext);
@@ -578,13 +624,21 @@
             {
                 // no more buffer space
                 // we should not be here actually
-                // TODO: handle this
+                Global.Log.Error("No more buffers available");
+                this.Disconnect(asyncContext, true);
                 return;
             }
 
-            if (!asyncContext.AcceptSocket.ReceiveAsync(asyncContext))
+            try
             {
-                this.ProcessReceive(asyncContext);
+                if (!asyncContext.AcceptSocket.ReceiveAsync(asyncContext))
+                {
+                    this.ProcessReceive(asyncContext);
+                }
+            }
+            catch
+            {
+                this.Disconnect(asyncContext, true);
             }
         }
 
@@ -596,29 +650,22 @@
                 return;
             }
 
-            PacketBuffer packet = null;
-
-            lock (this) // to force packet processing in received order
+            try
             {
                 ClientContext client = (ClientContext)asyncContext.UserToken;
-
-                packet = Global.Allocator.LockBuffer();
-                Array.Copy(asyncContext.Buffer, asyncContext.Offset, packet.Buffer, 0, asyncContext.BytesTransferred);
-                packet.ActualBufferSize = asyncContext.BytesTransferred;
-
-                // report new packet
-                this.OnReceive((IPEndPoint)client.Socket.RemoteEndPoint, packet);
+                if (client.Socket.Connected)
+                {
+                    this.OnReceive(client, (IPEndPoint)client.RemoteEndPoint, asyncContext.Buffer, asyncContext.Offset, asyncContext.BytesTransferred);
+                }
+            }
+            catch
+            {
+                this.Disconnect(asyncContext, true);
+                return;
             }
 
             // back to receiving loop
-            this.receiveBufferManager.FreeBuffer(asyncContext);
             this.StartReceive(asyncContext);
-
-            // release packet
-            if (packet != null)
-            {
-                packet.Release();
-            }
         }
 
         private void StartSend(SocketAsyncEventArgs asyncContext)
@@ -630,15 +677,32 @@
             {
                 // no more buffer space
                 // we should not be here actually
-                // TODO: handle this
+                Global.Log.Error("No more buffers available");
+
+                // release everything
+                client.Packet.Release();
+                asyncContext.UserToken = null;
+                asyncContext.AcceptSocket = null;
+                lock (this.sendAsyncContexts)
+                {
+                    this.sendAsyncContexts.Add(asyncContext);
+                }
+
                 return;
             }
 
             Array.Copy(client.Packet.Buffer, client.Packet.Position, asyncContext.Buffer, asyncContext.Offset, bytesToSend);
 
-            if (!asyncContext.AcceptSocket.SendAsync(asyncContext))
+            try
             {
-                this.ProcessSend(asyncContext);
+                if (!asyncContext.AcceptSocket.SendAsync(asyncContext))
+                {
+                    this.ProcessSend(asyncContext);
+                }
+            }
+            catch
+            {
+                this.Disconnect(asyncContext, false);
             }
         }
 
@@ -663,7 +727,7 @@
             else
             {
                 // notify about completely sent packet
-                this.OnSent((IPEndPoint)client.Socket.RemoteEndPoint, client.Packet);
+                this.OnSent((IPEndPoint)client.RemoteEndPoint, client.Packet);
 
                 // release everything
                 client.Packet.Release();
@@ -688,7 +752,14 @@
             {
             }
 
-            asyncContext.AcceptSocket.Close();
+            try
+            {
+                asyncContext.AcceptSocket.Close();
+            }
+            catch
+            {
+            }
+
             asyncContext.AcceptSocket = null;
 
             // remove client

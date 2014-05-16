@@ -34,8 +34,7 @@
         private string publishUri = null;
         private bool publishing = false;
 
-        // TODO: how to set it
-        private bool flvDump = true;
+        private bool flvDump = Properties.Settings.Default.EnableFlvDump;
         private string flvDumpPath = null;
         private FileStream flvDumpStream = null;
         private long flvFirstTimestamp = -1;
@@ -193,6 +192,8 @@
                 {
                     //Global.Log.DebugFormat("Writing to FLV: {0}, timestamp {3}, corrected {1}, keyframe {2}", msg.MessageType, (msg.Timestamp - this.flvFirstTimestamp), msg.KeyFrame, msg.Timestamp);
 
+                    PacketBuffer packet = null;
+
                     try
                     {
                         FlvTagHeader hdr = new FlvTagHeader
@@ -208,7 +209,7 @@
                             hdr.Timestamp = (uint)(msg.Timestamp - this.flvFirstTimestamp - this.timestampAdjust);
                         }
 
-                        PacketBuffer packet = hdr.ToPacketBuffer();
+                        packet = hdr.ToPacketBuffer();
 
                         using (EndianBinaryWriter writer = new EndianBinaryWriter(this.flvDumpStream, true))
                         {
@@ -229,6 +230,13 @@
                         }
 
                         Global.Log.ErrorFormat("FLV write failed: {0}", ex.ToString());
+                    }
+                    finally
+                    {
+                        if (packet != null)
+                        {
+                            packet.Release();
+                        }
                     }
                 }
             }
@@ -531,13 +539,16 @@
 
             if (this.flvDump)
             {
+                PacketBuffer headerPacket = null;
+                PacketBuffer metadataPacket = null;
+
                 try
                 {
                     this.flvDumpStream = new FileStream(this.flvDumpPath, FileMode.Create, FileAccess.Write, FileShare.Read);
 
                     FlvFileHeader fileHeader = new FlvFileHeader(audioFound, videoFound);
-                    PacketBuffer headerPacket = fileHeader.ToPacketBuffer();
-                    PacketBuffer metadataPacket = this.metadataMessage.ToFlvTag();
+                    headerPacket = fileHeader.ToPacketBuffer();
+                    metadataPacket = this.metadataMessage.ToFlvTag();
 
                     using (EndianBinaryWriter writer = new EndianBinaryWriter(this.flvDumpStream, true))
                     {
@@ -561,6 +572,18 @@
 
                     Global.Log.ErrorFormat("Can't open FLV dump file for writing: {0}", ex.ToString());
                 }
+                finally
+                {
+                    if (headerPacket != null)
+                    {
+                        headerPacket.Release();
+                    }
+
+                    if (metadataPacket != null)
+                    {
+                        metadataPacket.Release();
+                    }
+                }
             }
         }
 
@@ -574,7 +597,6 @@
             if (timestampData.Strings.ContainsKey("tc"))
             {
                 // SMPTE timestamp
-                // TODO: test
                 TimeSpan timestamp = new TimeSpan();
 
                 try

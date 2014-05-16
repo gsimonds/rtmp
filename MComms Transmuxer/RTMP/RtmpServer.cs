@@ -1,6 +1,7 @@
 ﻿namespace MComms_Transmuxer.RTMP
 {
     using System;
+    using System.Collections;
     using System.Collections.Generic;
     using System.Linq;
     using System.Net;
@@ -17,11 +18,12 @@
         private SocketTransport transport = null;
         private volatile bool isRunning = false;
         private Thread controlThread = null;
-        private Dictionary<IPEndPoint, RtmpSession> sessions = new Dictionary<IPEndPoint, RtmpSession>();
+        private Hashtable sessions = new Hashtable();
         private long sessionCounter = 0;
 
         private Statistics stat = new Statistics();
         private DateTime lastStatCollected = DateTime.MinValue;
+        private DateTime lastPublishingPointsChecked = DateTime.MinValue;
         private volatile int statNumberOfConnections = 0;
         private volatile int statTotalBandwidth = 0;
 
@@ -81,6 +83,12 @@
                     this.lastStatCollected = DateTime.Now;
                 }
 
+                if ((DateTime.Now - this.lastPublishingPointsChecked).TotalMilliseconds >= 1000)
+                {
+                    SmoothStreamingPublisher.DeleteExpired();
+                    this.lastPublishingPointsChecked = DateTime.Now;
+                }
+
                 Thread.Sleep(1);
             }
         }
@@ -113,7 +121,7 @@
                     return;
                 }
 
-                sessions[e.EndPoint].Dispose();
+                ((RtmpSession)sessions[e.EndPoint]).Dispose();
                 sessions.Remove(e.EndPoint);
                 this.statNumberOfConnections = sessions.Count;
             }
@@ -130,8 +138,8 @@
                     return;
                 }
 
-                this.statTotalBandwidth += e.Packet.ActualBufferSize;
-                sessions[e.EndPoint].OnReceive(e.Packet);
+                this.statTotalBandwidth += e.DataLength;
+                ((RtmpSession)sessions[e.EndPoint]).OnReceive(sender, e);
             }
         }
 

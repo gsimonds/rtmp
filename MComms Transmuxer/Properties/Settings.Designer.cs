@@ -91,5 +91,17 @@ namespace MComms_Transmuxer.Properties {
                 this["PublishNamePattern"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool EnableFlvDump {
+            get {
+                return ((bool)(this["EnableFlvDump"]));
+            }
+            set {
+                this["EnableFlvDump"] = value;
+            }
+        }
     }
 }

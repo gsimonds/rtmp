@@ -41,7 +41,6 @@
             }
             else
             {
-                // TODO: test
                 writer.Write((byte)RtmpAmf0Types.Array);
                 writer.Write((int)(amfObject.Booleans.Count + amfObject.Numbers.Count + amfObject.Strings.Count + amfObject.Nulls));
             }

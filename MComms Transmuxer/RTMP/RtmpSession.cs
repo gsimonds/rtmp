@@ -19,6 +19,7 @@
     public class RtmpSession : IDisposable
     {
         private long sessionId = 0;
+        private DateTime created = DateTime.Now;
         private SocketTransport transport = null;
         private IPEndPoint sessionEndPoint = null;
         private volatile bool isRunning = true;
@@ -26,6 +27,7 @@
         private RtmpProtocolParser parser = new RtmpProtocolParser();
         private Thread sessionThread = null;
         private Queue<PacketBuffer> receivedPackets = new Queue<PacketBuffer>();
+        private PacketBuffer lastReceivedPacket = null;
         private RtmpHandshake handshakeS1 = null;
         private int messageStreamCounter = 1;
         private ulong receivedSize = 0;
@@ -36,6 +38,7 @@
         private uint sendAckWindowSize = Global.RtmpDefaultAckWindowSize;
         private Dictionary<int, RtmpMessageStream> messageStreams = new Dictionary<int, RtmpMessageStream>();
         private DateTime lastActivity = DateTime.Now;
+        private int routeReceiveEventState = 0;
 
         public RtmpSession(long sessionId, SocketTransport transport, IPEndPoint sessionEndPoint)
         {
@@ -61,17 +64,37 @@
 
             this.ReleaseMessageStreams();
 
+            this.lastReceivedPacket = null;
+            while (this.receivedPackets.Count > 0)
+            {
+                this.receivedPackets.Peek().Release();
+                this.receivedPackets.Dequeue();
+            }
+
             Global.Log.DebugFormat("End point {0}, id {1}: session object disposed", this.sessionEndPoint, this.sessionId);
         }
 
         #endregion
 
-        public void OnReceive(PacketBuffer packet)
+        public void OnReceive(object sender, TransportArgs e)
         {
             lock (this.receivedPackets)
             {
-                packet.AddRef();
-                this.receivedPackets.Enqueue(packet);
+                if (this.lastReceivedPacket == null || (this.lastReceivedPacket.Size - this.lastReceivedPacket.ActualBufferSize) < e.DataLength)
+                {
+                    this.lastReceivedPacket = Global.Allocator.LockBuffer();
+                    this.receivedPackets.Enqueue(this.lastReceivedPacket);
+                }
+
+                Array.Copy(e.Data, e.DataOffset, this.lastReceivedPacket.Buffer, this.lastReceivedPacket.ActualBufferSize, e.DataLength);
+                this.lastReceivedPacket.ActualBufferSize += e.DataLength;
+
+                if (this.routeReceiveEventState == 1)
+                {
+                    // re-route socket receive event to this RTMP session
+                    e.ReceiveEventHandler = this.OnReceive;
+                    this.routeReceiveEventState = 2;
+                }
             }
         }
 
@@ -91,6 +114,10 @@
                         nothingToDo = false;
                         packet = this.receivedPackets.Dequeue();
                         receivedSize += (ulong)packet.ActualBufferSize;
+                        if (this.receivedPackets.Count == 0)
+                        {
+                            this.lastReceivedPacket = null;
+                        }
                     }
                 }
 
@@ -141,12 +168,20 @@
                 while ((packet = this.parser.GetSendPacket()) != null)
                 {
                     nothingToDo = false;
-                    this.transport.Send(this.sessionEndPoint, packet);
 
-                    sentSize += (uint)packet.ActualBufferSize;
-                    if (sentSize > uint.MaxValue)
+                    try
                     {
-                        sentSize -= uint.MaxValue;
+                        this.transport.Send(this.sessionEndPoint, packet);
+
+                        sentSize += (uint)packet.ActualBufferSize;
+                        if (sentSize > uint.MaxValue)
+                        {
+                            sentSize -= uint.MaxValue;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Global.Log.ErrorFormat("Send exception: {0}", ex.ToString());
                     }
 
                     packet.Release();
@@ -297,7 +332,6 @@
                         RtmpMessageAck recvCtrl = (RtmpMessageAck)msg;
                         this.lastReportedSentSize = recvCtrl.ReceivedBytes;
                         Global.Log.DebugFormat("Received {0}, reported size {1}, actually sent {2}", msg.MessageType, recvCtrl.ReceivedBytes, this.sentSize);
-                        // TODO: limit sending???
                         break;
                     }
 
@@ -325,7 +359,6 @@
                                 Global.Log.DebugFormat("Received {0}, event {1}, message stream id {2}", msg.MessageType, recvCtrl.EventType, recvCtrl.TargetMessageStreamId);
                                 break;
                         }
-                        // TODO: support ping request?
                         break;
                     }
 
@@ -936,7 +969,18 @@
 
                         try
                         {
+
                             messageStream.ProcessMediaData((RtmpMessageMedia)msg);
+
+                            if (this.routeReceiveEventState == 0)
+                            {
+                                lock (this.receivedPackets)
+                                {
+                                    // we're ready to re-route socket receive event to this RTMP session
+                                    this.routeReceiveEventState = 1;
+                                }
+                            }
+
                         }
                         catch (CriticalStreamException unex)
                         {

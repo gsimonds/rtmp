@@ -30,7 +30,7 @@ namespace MComms_Transmuxer
         /// Transport buffer size used to accumulate received data.
         /// This must be equal or bigger than RtmpOurChunkSize
         /// </summary>
-        public const int TransportBufferSize = 10240;
+        public const int TransportBufferSize = 8192;
 
         /// <summary>
         /// Buffer size to store one whole media frame, including I-frame in full HD resolution

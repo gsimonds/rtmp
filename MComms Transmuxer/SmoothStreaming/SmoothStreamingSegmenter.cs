@@ -92,8 +92,10 @@
                 byte[] privateData = new byte[mediaType.PrivateData.Length * 2];
                 int privateDataSize = 0;
                 int nalUnitLength = (int)mvih.dwFlags;
+                StringBuilder sb = new StringBuilder();
 
                 // copy SPS
+                sb.Append("00000001");
                 int numOfSps = mediaType.PrivateData[5] & 0x1F;
                 int byteOffset = 6;
                 for (int i = 0; i < numOfSps; ++i)
@@ -106,10 +108,15 @@
                         privateDataSize += nalUnitLength;
                         Array.Copy(mediaType.PrivateData, byteOffset + 2, privateData, privateDataSize, spsLength);
                         privateDataSize += spsLength;
+                        for (int j = 0; j < spsLength; ++j)
+                        {
+                            sb.AppendFormat("{0:x2}", mediaType.PrivateData[byteOffset + 2 + j]);
+                        }
                     }
                     byteOffset += 2 + spsLength;
                 }
 
+                sb.Append("00000001");
                 int numOfPps = mediaType.PrivateData[byteOffset];
                 byteOffset++;
                 for (int i = 0; i < numOfPps; ++i)
@@ -122,9 +129,17 @@
                         privateDataSize += nalUnitLength;
                         Array.Copy(mediaType.PrivateData, byteOffset + 2, privateData, privateDataSize, ppsLength);
                         privateDataSize += ppsLength;
+                        for (int j = 0; j < ppsLength; ++j)
+                        {
+                            sb.AppendFormat("{0:x2}", mediaType.PrivateData[byteOffset + 2 + j]);
+                        }
                         break;
                     }
                 }
+
+                // save IIS compatible private data,
+                // we'll use it later to compare to publishing point's manifest
+                mediaType.PrivateDataIisString = sb.ToString();
 
                 int totalDataSize = Marshal.SizeOf(mvih) + privateDataSize;
                 Marshal.StructureToPtr(mvih, this.mediaDataPtr, true);
@@ -191,6 +206,9 @@
 
             if (!this.synchronized)
             {
+                // make sure that publishing point matches to our media
+                this.publisher.CompareHeader();
+
                 DateTime lastAbsoluteTime = DateTime.MinValue;
                 long lastTimestamp = long.MinValue;
                 this.publisher.GetSynchronizationInfo(out lastAbsoluteTime, out lastTimestamp);
@@ -235,6 +253,7 @@
 
                 PacketBuffer segment = Global.SegmentAllocator.LockBuffer();
                 Marshal.Copy(outputDataPtr, segment.Buffer, 0, outputDataSize);
+                segment.ActualBufferSize = outputDataSize;
 
                 try
                 {

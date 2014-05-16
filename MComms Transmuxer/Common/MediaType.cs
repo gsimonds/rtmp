@@ -22,6 +22,11 @@
 
         public byte[] PrivateData { get; set; }
 
+        /// <summary>
+        /// IIS compatible codec private data string
+        /// </summary>
+        public string PrivateDataIisString { get; set; }
+
         // video specific properties
 
         public int Width { get; set; }
