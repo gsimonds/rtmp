@@ -43,6 +43,8 @@
 #endif
 
             this.transport.MaxConnections = Global.RtmpMaxConnections;
+            this.transport.ReceiveContextPoolSize = Global.RtmpMaxConnections;
+            this.transport.SendContextPoolSize = Global.RtmpMaxConnections;
             this.transport.ReceiveBufferSize = Global.TransportBufferSize;
             this.transport.SendBufferSize = Global.TransportBufferSize;
 

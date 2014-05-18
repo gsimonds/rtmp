@@ -17,6 +17,11 @@
         private List<int> registeredMessageStreams = new List<int>();
         private bool aligning = false;
 
+#if DEBUG_RTMP_CORRUPTION
+        private List<PacketBuffer> history = new List<PacketBuffer>();
+        private RtmpMessage lastMessage = null;
+#endif
+
         /// <summary>
         /// Output packet queue. We're using List instead of Queue to allow insertion
         /// of high priority packets to the beginning of the queue
@@ -60,6 +65,17 @@
             {
                 // if we have the packet then add it to the end of the stream
                 this.dataStream.Append(dataPacket, 0, dataPacket.ActualBufferSize);
+#if DEBUG_RTMP_CORRUPTION
+                {
+                    this.history.Add(dataPacket);
+                    dataPacket.AddRef();
+                    if (this.history.Count > 3)
+                    {
+                        this.history[0].Release();
+                        this.history.RemoveAt(0);
+                    }
+                }
+#endif
             }
 
             if (this.dataStream.Length == 0)
@@ -153,6 +169,13 @@
                         break;
                     }
             }
+
+#if DEBUG_RTMP_CORRUPTION
+            if (msg != null)
+            {
+                this.lastMessage = msg;
+            }
+#endif
 
             return msg;
         }

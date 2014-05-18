@@ -33,6 +33,7 @@
         private ulong receivedSize = 0;
         private ulong sentSize = 0;
         private ulong lastReportedReceivedSize = 0;
+        private DateTime lastReceivedSizeReported = DateTime.MinValue;
         private ulong lastReportedSentSize = 0;
         private uint receiveAckWindowSize = Global.RtmpDefaultAckWindowSize;
         private uint sendAckWindowSize = Global.RtmpDefaultAckWindowSize;
@@ -157,10 +158,11 @@
 
                 if (this.receiveAckWindowSize > 0)
                 {
-                    if ((this.receivedSize - this.lastReportedReceivedSize) >= this.receiveAckWindowSize)
+                    if ((this.receivedSize - this.lastReportedReceivedSize) >= this.receiveAckWindowSize && (DateTime.Now - this.lastReceivedSizeReported).TotalMilliseconds > 60000)
                     {
                         this.parser.Encode(new RtmpMessageAck((uint)(this.receivedSize - this.lastReportedReceivedSize)));
                         this.lastReportedReceivedSize = this.receivedSize;
+                        this.lastReceivedSizeReported = DateTime.Now;
                     }
                 }
 

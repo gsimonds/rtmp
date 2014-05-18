@@ -80,7 +80,7 @@
         private List<SocketAsyncEventArgs> receiveAsyncContexts = null;
         private List<SocketAsyncEventArgs> sendAsyncContexts = null;
 
-        private Semaphore maxConnectionsEnforcer = null;
+        private int sentPackets = 0;
 
         #endregion
 
@@ -295,7 +295,6 @@
             client.Packet.Position = 0;
             client.Packet.AddRef();
 
-            sendAsyncContext.AcceptSocket = client.Socket;
             sendAsyncContext.UserToken = client;
             this.StartSend(sendAsyncContext);
         }
@@ -395,7 +394,6 @@
 
         private void Initialize()
         {
-            this.maxConnectionsEnforcer = new Semaphore(this.maxConnections, this.maxConnections);
             this.clients = new Dictionary<IPEndPoint, ClientContext>(this.maxConnections);
 
             if (this.serverEndPoint != null)
@@ -481,7 +479,6 @@
 
             this.listenSocket = null;
             this.clients = null;
-            this.maxConnectionsEnforcer = null;
 
             this.receiveBufferManager = null;
             this.sendBufferManager = null;
@@ -511,9 +508,6 @@
             {
                 return;
             }
-
-            // limit number of connections
-            this.maxConnectionsEnforcer.WaitOne();
 
             try
             {
@@ -613,13 +607,14 @@
             this.OnConnect(client.RemoteEndPoint);
 
             // start receive loop
-            recvAsyncContext.AcceptSocket = client.Socket;
             recvAsyncContext.UserToken = client;
             this.StartReceive(recvAsyncContext);
         }
 
         private void StartReceive(SocketAsyncEventArgs asyncContext)
         {
+            ClientContext client = (ClientContext)asyncContext.UserToken;
+
             if (!this.receiveBufferManager.SetBuffer(asyncContext))
             {
                 // no more buffer space
@@ -631,7 +626,7 @@
 
             try
             {
-                if (!asyncContext.AcceptSocket.ReceiveAsync(asyncContext))
+                if (!client.Socket.ReceiveAsync(asyncContext))
                 {
                     this.ProcessReceive(asyncContext);
                 }
@@ -682,7 +677,6 @@
                 // release everything
                 client.Packet.Release();
                 asyncContext.UserToken = null;
-                asyncContext.AcceptSocket = null;
                 lock (this.sendAsyncContexts)
                 {
                     this.sendAsyncContexts.Add(asyncContext);
@@ -695,7 +689,7 @@
 
             try
             {
-                if (!asyncContext.AcceptSocket.SendAsync(asyncContext))
+                if (!client.Socket.SendAsync(asyncContext))
                 {
                     this.ProcessSend(asyncContext);
                 }
@@ -708,13 +702,14 @@
 
         private void ProcessSend(SocketAsyncEventArgs asyncContext)
         {
+            ClientSendContext client = (ClientSendContext)asyncContext.UserToken;
+
             if (!this.isRunning || asyncContext.SocketError != SocketError.Success || asyncContext.BytesTransferred == 0)
             {
                 this.Disconnect(asyncContext, false);
                 return;
             }
 
-            ClientSendContext client = (ClientSendContext)asyncContext.UserToken;
             client.Packet.Position += asyncContext.BytesTransferred;
 
             this.sendBufferManager.FreeBuffer(asyncContext);
@@ -732,11 +727,14 @@
                 // release everything
                 client.Packet.Release();
                 asyncContext.UserToken = null;
-                asyncContext.AcceptSocket = null;
+                int sendAsyncContextsCount = 0;
                 lock (this.sendAsyncContexts)
                 {
                     this.sendAsyncContexts.Add(asyncContext);
+                    sendAsyncContextsCount = this.sendAsyncContexts.Count;
                 }
+
+                //Global.Log.DebugFormat("Releasing context {0}, packet {1}, size {2}, sendAsyncContexts size {3}, sent {4}", client.RemoteEndPoint, client.Packet.Id, client.Packet.ActualBufferSize, sendAsyncContextsCount, ++sentPackets);
             }
         }
 
@@ -746,7 +744,7 @@
 
             try
             {
-                asyncContext.AcceptSocket.Shutdown(SocketShutdown.Both);
+                client.Socket.Shutdown(SocketShutdown.Both);
             }
             catch
             {
@@ -754,13 +752,11 @@
 
             try
             {
-                asyncContext.AcceptSocket.Close();
+                client.Socket.Close();
             }
             catch
             {
             }
-
-            asyncContext.AcceptSocket = null;
 
             // remove client
             lock (this.clients)
@@ -779,6 +775,12 @@
             }
             else
             {
+                ClientSendContext clientSend = (ClientSendContext)asyncContext.UserToken;
+                if (clientSend.Packet != null)
+                {
+                    clientSend.Packet.Release();
+                }
+
                 this.sendBufferManager.FreeBuffer(asyncContext);
 
                 lock (this.sendAsyncContexts)
@@ -786,8 +788,6 @@
                     this.sendAsyncContexts.Add(asyncContext);
                 }
             }
-
-            this.maxConnectionsEnforcer.Release();
 
             // notify about disconnection
             this.OnDisconnect(client.RemoteEndPoint);

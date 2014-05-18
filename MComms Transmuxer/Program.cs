@@ -20,7 +20,7 @@
         {
             Global.Log.Info("Starting MComms Transmuxer...");
 
-            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, Global.RtmpMaxConnections * 100);
+            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, Global.RtmpMaxConnections * 30);
             Global.MediaAllocator = new PacketBufferAllocator(Global.OneMediaBufferSize, Global.RtmpMaxConnections);
             Global.SegmentAllocator = new PacketBufferAllocator(Global.SegmentBufferSize, Global.RtmpMaxConnections / 50);
 

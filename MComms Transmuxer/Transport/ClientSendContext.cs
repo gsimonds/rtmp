@@ -12,14 +12,17 @@
     {
         public ClientSendContext()
         {
+            this.Created = DateTime.Now;
         }
 
         public ClientSendContext(ClientContext obj)
         {
             this.Socket = obj.Socket;
             this.RemoteEndPoint = obj.RemoteEndPoint;
+            this.Created = DateTime.Now;
         }
 
         public PacketBuffer Packet { get; set; }
+        public DateTime Created { get; set; }
     }
 }

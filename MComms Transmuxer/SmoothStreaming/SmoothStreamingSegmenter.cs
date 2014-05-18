@@ -11,7 +11,6 @@
     using MComms_Transmuxer.Common;
     using MComms_Transmuxer.RTMP;
 
-    // TODO: 32/64bit dlls
     public class SmoothStreamingSegmenter : IDisposable
     {
         private IntPtr mediaDataPtr = IntPtr.Zero;

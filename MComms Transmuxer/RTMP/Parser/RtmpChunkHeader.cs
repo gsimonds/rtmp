@@ -88,7 +88,10 @@
                 return null; // not enough data
             }
 
+            int totalRead = 0;
+
             byte byte0 = (byte)dataStream.ReadByte();
+            totalRead++;
 
             RtmpChunkHeader hdr = new RtmpChunkHeader();
             hdr.Format = (byte)((byte0 & 0xC0) >> 6);
@@ -100,10 +103,12 @@
                     {
                         if (dataStream.Length < 2)
                         {
+                            dataStream.Seek(-totalRead, System.IO.SeekOrigin.Current);
                             return null; // not enough data
                         }
 
                         byte byte1 = (byte)dataStream.ReadByte();
+                        totalRead++;
                         hdr.ChunkStreamId = (uint)byte1 + 64;
 
                         break;
@@ -113,11 +118,13 @@
                     {
                         if (dataStream.Length < 3)
                         {
+                            dataStream.Seek(-totalRead, System.IO.SeekOrigin.Current);
                             return null; // not enough data
                         }
 
                         byte byte1 = (byte)dataStream.ReadByte();
                         byte byte2 = (byte)dataStream.ReadByte();
+                        totalRead += 2;
                         hdr.ChunkStreamId = 64 + (uint)byte1 + (uint)byte2 * 256;
 
                         break;
@@ -143,6 +150,7 @@
 
             if (requiredSize > dataStream.Length - dataStream.Position)
             {
+                dataStream.Seek(-totalRead, System.IO.SeekOrigin.Current);
                 return null; // not enough data
             }
 
@@ -151,13 +159,16 @@
                 if (hdr.Format <= 2)
                 {
                     int timestamp = reader.ReadInt32(3);
+                    totalRead += 3;
                     if (hdr.Format <= 1)
                     {
                         hdr.MessageLength = reader.ReadInt32(3);
                         hdr.MessageType = (RtmpMessageType)reader.ReadByte();
+                        totalRead += 4;
                         if (hdr.Format == 0)
                         {
                             hdr.MessageStreamId = reader.ReadInt32(4, Endianness.LittleEndian);
+                            totalRead += 4;
                         }
                     }
 
@@ -165,6 +176,7 @@
                     {
                         // need to read 4-byte extended timestamp
                         timestamp = reader.ReadInt32();
+                        totalRead += 4;
                     }
 
                     if (hdr.Format == 0)

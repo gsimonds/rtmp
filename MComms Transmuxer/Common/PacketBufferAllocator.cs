@@ -87,6 +87,7 @@
                 if (this.freeBuffers.Count == 0)
                 {
                     int addBufferCount = this.bufferCount / 10;
+                    if (addBufferCount == 0) ++addBufferCount;
                     Global.Log.WarnFormat("Allocator[{0}/{1}]: No more empty buffers, allocate additional {2} buffers", this.bufferSize, this.bufferCount, addBufferCount);
 
                     for (int i = 0; i < addBufferCount; ++i)
@@ -111,7 +112,7 @@
                 this.lockedBuffersTotal += this.lockedBuffers.Count;
                 this.lockedBuffersCount++;
 
-                if (this.lockedBuffersCount % (this.bufferCount * 1) == 0)
+                if (this.bufferCount > 1000 && this.lockedBuffersCount % (this.bufferCount * 10) == 0)
                 {
                     Global.Log.DebugFormat("Allocator[{0}/{1}]: avg locked buffers {2}, max locked buffers {3}", this.bufferSize, this.bufferCount, (this.lockedBuffersTotal / this.lockedBuffersCount), this.maxLockedBuffers);
                 }
@@ -144,7 +145,7 @@
                 this.usedBuffersSize += buffer.ActualBufferSize;
                 this.usedBuffersCount++;
 
-                if (this.usedBuffersCount % (this.bufferCount * 1) == 0)
+                if (this.bufferCount > 1000 && this.usedBuffersCount % (this.bufferCount * 10) == 0)
                 {
                     Global.Log.DebugFormat("Allocator[{0}/{1}]: avg buffer usage {2:0.00}%", this.bufferSize, this.bufferCount, ((double)this.usedBuffersSize / this.bufferSize / this.usedBuffersCount) * 100.0, this.maxLockedBuffers);
                 }
