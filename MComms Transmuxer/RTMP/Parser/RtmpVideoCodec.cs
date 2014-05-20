@@ -6,6 +6,9 @@
     using System.Text;
     using System.Threading.Tasks;
 
+    /// <summary>
+    /// Video codecs supported by RTMP
+    /// </summary>
     public enum RtmpVideoCodec
     {
         FLV1 = 2,

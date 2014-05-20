@@ -6,6 +6,9 @@
     using System.Text;
     using System.Threading.Tasks;
 
+    /// <summary>
+    /// AMF null object
+    /// </summary>
     public class RtmpAmfNull
     {
     }

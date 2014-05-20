@@ -9,32 +9,79 @@
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// RTMP message. Base class for various specific RTMP messages. Used to parse RTMP message.
+    /// </summary>
     public class RtmpMessage
     {
+        #region Constructor
+
+        /// <summary>
+        /// Creates new instance of RtmpMessage
+        /// </summary>
         public RtmpMessage()
         {
         }
 
+        #endregion
+
+        #region Public properties
+
+        /// <summary>
+        /// Gets or sets chunk stream id current message was received on
+        /// </summary>
         public uint ChunkStreamId { get; set; }
 
+        /// <summary>
+        /// Gets or sets RTMP message type as received
+        /// </summary>
         public RtmpMessageType OrigMessageType { get; set; }
 
+        /// <summary>
+        /// Gets or sets internal RTMP message type
+        /// </summary>
         public RtmpIntMessageType MessageType { get; set; }
 
+        /// <summary>
+        /// Gets or sets message stream id current message was received on
+        /// </summary>
         public int MessageStreamId { get; set; }
 
+        /// <summary>
+        /// Timestamp of the current message
+        /// </summary>
         public long Timestamp { get; set; }
 
+        #endregion
+
+        #region Public methods
+
+        /// <summary>
+        /// Converts current object to RTMP chunk and returns packet buffer containing it.
+        /// Method should be overridden in a child class.
+        /// </summary>
+        /// <returns>Packet buffer containing the converted RTMP chunk</returns>
         public virtual PacketBuffer ToRtmpChunk()
         {
             return null;
         }
 
+        /// <summary>
+        /// Converts current object to FLV tag and returns packet buffer containing it.
+        /// Method should be overridden in a child class.
+        /// </summary>
+        /// <returns>Packet buffer containing the converted FLV tag</returns>
         public virtual PacketBuffer ToFlvTag()
         {
             return null;
         }
 
+        /// <summary>
+        /// Decodes RTMP message from specified stream using provided chunk header
+        /// </summary>
+        /// <param name="hdr">Chunk header of a message to be decoded</param>
+        /// <param name="dataStream">Stream to read data from</param>
+        /// <returns>New RTMP message if parsing was successful, null otherwise</returns>
         public static RtmpMessage Decode(RtmpChunkHeader hdr, PacketBufferStream dataStream)
         {
             RtmpMessage msg = null;
@@ -190,7 +237,7 @@
                         RtmpMediaPacketType packetType = (RtmpMediaPacketType)dataStream.ReadByte();
 
                         RtmpMessageMedia msgMedia = new RtmpMessageMedia(audioCodec, packetType, sampleRate, sampleSize, channels);
-                        if (dataStream.OneMessageStream)
+                        if (dataStream.OneMessage)
                         {
                             msgMedia.MediaData = dataStream.FirstPacketBuffer;
                             msgMedia.MediaData.AddRef();
@@ -228,7 +275,7 @@
                         }
 
                         RtmpMessageMedia msgMedia = new RtmpMessageMedia(videoCodec, packetType, decoderDelay, keyFrame);
-                        if (dataStream.OneMessageStream)
+                        if (dataStream.OneMessage)
                         {
                             msgMedia.MediaData = dataStream.FirstPacketBuffer;
                             msgMedia.MediaData.AddRef();
@@ -286,6 +333,16 @@
             return msg;
         }
 
+        #endregion
+
+        #region Private methods
+
+        /// <summary>
+        /// Decodes AMF0 encoded RTMP message from specified stream using provided chunk header
+        /// </summary>
+        /// <param name="hdr">Chunk header of a message to be decoded</param>
+        /// <param name="dataStream">Stream to read data from</param>
+        /// <returns>New RTMP message if parsing was successful, null otherwise</returns>
         private static RtmpMessage DecodeAmf0(RtmpChunkHeader hdr, PacketBufferStream dataStream)
         {
             List<object> pars = new List<object>();
@@ -444,6 +501,11 @@
             return msg;
         }
 
+        /// <summary>
+        /// Decodes "user control" RTMP message from specified stream
+        /// </summary>
+        /// <param name="dataStream">Stream to read data from</param>
+        /// <returns>New RTMP message if parsing was successful, null otherwise</returns>
         private static RtmpMessageUserControl DecodeUserControl(PacketBufferStream dataStream)
         {
             RtmpMessageUserControl msg = null;
@@ -484,5 +546,7 @@
 
             return msg;
         }
+
+        #endregion
     }
 }

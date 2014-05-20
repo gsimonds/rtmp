@@ -13,24 +13,91 @@
     using MComms_Transmuxer.Common;
     using MComms_Transmuxer.RTMP;
 
+    /// <summary>
+    /// Smooth streaming publisher handles publishing points and pushes media data there
+    /// </summary>
     public class SmoothStreamingPublisher : IDisposable
     {
+        #region Private constants and fields
+
+        /// <summary>
+        /// Static list of all publishers
+        /// </summary>
         private static Dictionary<string, SmoothStreamingPublisher> publishers = new Dictionary<string, SmoothStreamingPublisher>();
 
+        /// <summary>
+        /// Publish URI
+        /// </summary>
         private string publishUri = null;
+
+        /// <summary>
+        /// Muxer id
+        /// </summary>
         private int muxId = -1;
+
+        /// <summary>
+        /// Map from media type to stream GUID
+        /// </summary>
         private Dictionary<MediaType, Guid> streams = new Dictionary<MediaType, Guid>();
+
+        /// <summary>
+        /// Reverse map from stream GUID to media type
+        /// </summary>
         private Dictionary<Guid, MediaType> streamsRev = new Dictionary<Guid, MediaType>();
+
+        /// <summary>
+        /// Map from stream GUID to muxer's stream id
+        /// </summary>
         private Dictionary<Guid, int> publishStreamId2MuxerStreamId = new Dictionary<Guid, int>();
+
+        /// <summary>
+        /// Map from stream GUID to last activity
+        /// </summary>
         private Dictionary<Guid, DateTime> publishStreamId2LastActivity = new Dictionary<Guid, DateTime>();
+
+        /// <summary>
+        /// Whether media data started (i.e. header pushed to publishing point)
+        /// </summary>
         private bool mediaDataStarted = false;
+
+        /// <summary>
+        /// System time when last segment was pushed
+        /// </summary>
         private DateTime lastPacketAbsoluteTime = DateTime.MinValue;
+
+        /// <summary>
+        /// Timestamp of the last pushed segment
+        /// </summary>
         private long lastPacketTimestamp = long.MinValue;
+
+        /// <summary>
+        /// Map from stream GUID to web request
+        /// </summary>
         private Dictionary<Guid, HttpWebRequest> webRequests = new Dictionary<Guid, HttpWebRequest>();
+
+        /// <summary>
+        /// Map from stream GUID to web request stream
+        /// </summary>
         private Dictionary<Guid, Stream> webRequestStreams = new Dictionary<Guid, Stream>();
+
+        /// <summary>
+        /// Last time expired streams were checked
+        /// </summary>
         private DateTime lastExpiredStreamsChecked = DateTime.MinValue;
+
+        /// <summary>
+        /// Last activity time (i.e. something was pushed)
+        /// </summary>
         private DateTime lastActivity = DateTime.Now;
 
+        #endregion
+
+        #region Constructor
+
+        /// <summary>
+        /// Creates new instance of SmoothStreamingPublisher
+        /// </summary>
+        /// <param name="publishUri">Publish URI</param>
         private SmoothStreamingPublisher(string publishUri)
         {
             this.publishUri = publishUri;
@@ -42,6 +109,13 @@
             this.StartPublishingPoint();
         }
 
+        #endregion
+
+        #region Public properties
+
+        /// <summary>
+        /// Gets publish URI
+        /// </summary>
         public string PublishUri
         {
             get
@@ -49,6 +123,8 @@
                 return this.publishUri;
             }
         }
+
+        #endregion
 
         #region IDisposable
 
@@ -83,6 +159,13 @@
 
         #endregion
 
+        #region Public methods
+
+        /// <summary>
+        /// Static method creates (or finds) publisher for the specified URI
+        /// </summary>
+        /// <param name="publishUri">Publish URI</param>
+        /// <returns>Created/found publisher</returns>
         public static SmoothStreamingPublisher Create(string publishUri)
         {
             lock (SmoothStreamingPublisher.publishers)
@@ -100,6 +183,9 @@
             }
         }
 
+        /// <summary>
+        /// Static method checks all existing publisher and disposes expired ones
+        /// </summary>
         public static void DeleteExpired()
         {
             lock (SmoothStreamingPublisher.publishers)
@@ -125,6 +211,9 @@
             }
         }
 
+        /// <summary>
+        /// Static method deletes all publishers (called from RTMP server destructor)
+        /// </summary>
         public static void DeleteAll()
         {
             lock (SmoothStreamingPublisher.publishers)
@@ -138,6 +227,11 @@
             }
         }
 
+        /// <summary>
+        /// Registers new media type for this publisher. Changes publisher state if we need to update the header.
+        /// </summary>
+        /// <param name="mediaType">Media type to register</param>
+        /// <returns>GUID of registered stream</returns>
         public Guid RegisterMediaType(MediaType mediaType)
         {
             lock (this)
@@ -202,6 +296,16 @@
             }
         }
 
+        /// <summary>
+        /// Adds registered media stream to muxer.
+        /// </summary>
+        /// <param name="streamId">Media stream GUID (received from RegisterMediaType)</param>
+        /// <param name="streamType">Stream type (in muxer format)</param>
+        /// <param name="bitrate">Stream bitrate</param>
+        /// <param name="language">Stream language</param>
+        /// <param name="extraDataSize">Codec private data size</param>
+        /// <param name="extraData">Codec private data</param>
+        /// <returns>Stream id in the muxer</returns>
         public int AddStream(Guid streamId, Int32 streamType, Int32 bitrate, UInt16 language, Int32 extraDataSize, IntPtr extraData)
         {
             lock (this)
@@ -234,6 +338,11 @@
             }
         }
 
+        /// <summary>
+        /// Gets muxer id
+        /// </summary>
+        /// <param name="streamId">Stream GUID</param>
+        /// <returns>Found muxer id or -1 if we need to re-add stream to a muxer</returns>
         public int GetMuxId(Guid streamId)
         {
             lock (this)
@@ -250,6 +359,11 @@
             }
         }
 
+        /// <summary>
+        /// Gets media type of the registered stream
+        /// </summary>
+        /// <param name="streamId">Stream GUID</param>
+        /// <returns>Stream's media type</returns>
         public MediaType GetMediaType(Guid streamId)
         {
             lock (this)
@@ -265,6 +379,11 @@
             }
         }
 
+        /// <summary>
+        /// Gets synchronization info
+        /// </summary>
+        /// <param name="lastAbsoluteTime">System time when last segment was pushed</param>
+        /// <param name="lastTimestamp">Stream timestamp when last segment was pushed</param>
         public void GetSynchronizationInfo(out DateTime lastAbsoluteTime, out long lastTimestamp)
         {
             lock (this)
@@ -274,6 +393,15 @@
             }
         }
 
+        /// <summary>
+        /// Push segment to publishing point
+        /// </summary>
+        /// <param name="streamId">Stream GUID</param>
+        /// <param name="absoluteTime">Current system time</param>
+        /// <param name="timestamp">Current timestamp</param>
+        /// <param name="buffer">Data to push</param>
+        /// <param name="offset">Data offset</param>
+        /// <param name="length">Data length</param>
         public void PushData(Guid streamId, DateTime absoluteTime, long timestamp, byte[] buffer, int offset, int length)
         {
             this.lastActivity = DateTime.Now;
@@ -349,6 +477,9 @@
             //GC.Collect();
         }
 
+        /// <summary>
+        /// Compares header of the publishing point to our media types
+        /// </summary>
         public void CompareHeader()
         {
             lock (this)
@@ -369,6 +500,14 @@
             }
         }
 
+        #endregion
+
+        #region Private methods
+
+        /// <summary>
+        /// Creates web request for the specified stream
+        /// </summary>
+        /// <param name="streamId">Stream GUID</param>
         private void CreateWebRequest(Guid streamId)
         {
             string streamPublishUri = string.Format("{0}/Streams({1})", this.publishUri, streamId);
@@ -385,6 +524,9 @@
             Global.Log.InfoFormat("Created web request {0}", streamPublishUri);
         }
 
+        /// <summary>
+        /// Starts publishing point if it's not started yet
+        /// </summary>
         private void StartPublishingPoint()
         {
             Stream reqStream = null;
@@ -490,6 +632,9 @@
             }
         }
 
+        /// <summary>
+        /// Shuts down publishing point
+        /// </summary>
         private void ShutdownPublishingPoint()
         {
             Stream reqStream = null;
@@ -572,6 +717,10 @@
             }
         }
 
+        /// <summary>
+        /// Gets manifest from publishing point and compares it with our media types
+        /// </summary>
+        /// <returns>True if publishing manifest matches to our data, false otherwise</returns>
         private bool IsPublishingPointManifestMatching()
         {
             bool matching = false;
@@ -758,6 +907,9 @@
             return matching;
         }
 
+        /// <summary>
+        /// Checks if any stream is expires and unregisters it
+        /// </summary>
         private void UnregisterExpiredStreams()
         {
             if ((DateTime.Now - this.lastExpiredStreamsChecked).TotalMilliseconds < 1000)
@@ -786,6 +938,10 @@
             this.lastExpiredStreamsChecked = DateTime.Now;
         }
 
+        /// <summary>
+        /// Unregisters specified streams
+        /// </summary>
+        /// <param name="streamId">Stream GUID</param>
         private void UnregisterStream(Guid streamId)
         {
             Global.Log.DebugFormat("Unregistering media type {0}", streamId);
@@ -811,6 +967,9 @@
             this.publishStreamId2LastActivity.Remove(streamId);
         }
 
+        /// <summary>
+        /// Pushes header to publishing point
+        /// </summary>
         private void PushHeader()
         {
             foreach (KeyValuePair<Guid, int> pair in publishStreamId2MuxerStreamId)
@@ -857,6 +1016,13 @@
             this.mediaDataStarted = true;
         }
 
+        /// <summary>
+        /// Pushes header data to a publishing point
+        /// </summary>
+        /// <param name="streamId">Stream GUID</param>
+        /// <param name="buffer">Header data</param>
+        /// <param name="offset">Header data offset</param>
+        /// <param name="length">Header data length</param>
         private void PushHeaderData(Guid streamId, byte[] buffer, int offset, int length)
         {
             if (!this.webRequests.ContainsKey(streamId))
@@ -868,5 +1034,7 @@
             webRequestStream.Write(buffer, offset, length);
             webRequestStream.Flush();
         }
+
+        #endregion
     }
 }

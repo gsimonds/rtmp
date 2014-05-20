@@ -7,20 +7,39 @@
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// AMF specific extensions for EndianBinaryWriter class
+    /// </summary>
     public static class EndianBinaryWriterAmfExtension
     {
+        /// <summary>
+        /// Write AMF0 encoded number
+        /// </summary>
+        /// <param name="writer">Binary writer to use</param>
+        /// <param name="number">Number to write</param>
         public static void WriteAmf0(this EndianBinaryWriter writer, double number)
         {
             writer.Write((byte)RtmpAmf0Types.Number);
             writer.Write(number);
         }
 
+        /// <summary>
+        /// Write AMF0 encoded boolean value
+        /// </summary>
+        /// <param name="writer">Binary writer to use</param>
+        /// <param name="boolean">Boolean value to write</param>
         public static void WriteAmf0(this EndianBinaryWriter writer, bool boolean)
         {
             writer.Write((byte)RtmpAmf0Types.Boolean);
             writer.Write(boolean);
         }
 
+        /// <summary>
+        /// Write AMF0 encoded string
+        /// </summary>
+        /// <param name="writer">Binary writer to use</param>
+        /// <param name="str">String to write</param>
+        /// <param name="objectStart">Is it object start or not</param>
         public static void WriteAmf0(this EndianBinaryWriter writer, string str, bool objectStart = false)
         {
             if (objectStart == false)
@@ -33,6 +52,12 @@
             writer.Write(utf8);
         }
 
+        /// <summary>
+        /// Write AMF0 encoded AMF object
+        /// </summary>
+        /// <param name="writer">Binary writer to use</param>
+        /// <param name="amfObject">AMF object to write</param>
+        /// <param name="isArray">Is it array or an object</param>
         public static void WriteAmf0(this EndianBinaryWriter writer, RtmpAmfObject amfObject, bool isArray = false)
         {
             if (!isArray)
@@ -69,6 +94,11 @@
             writer.Write((byte)RtmpAmf0Types.ObjectEnd);
         }
 
+        /// <summary>
+        /// Write AMF0 encoded object
+        /// </summary>
+        /// <param name="writer">Binary writer to use</param>
+        /// <param name="obj">Object to write</param>
         public static void WriteAmf0(this EndianBinaryWriter writer, object obj)
         {
             Type objType = obj.GetType();
@@ -95,6 +125,12 @@
             }
         }
 
+        /// <summary>
+        /// Write AMF0 encoded object list
+        /// </summary>
+        /// <param name="writer">Binary writer to use</param>
+        /// <param name="objList">Object list to write</param>
+        /// <param name="startIndex">Start index</param>
         public static void WriteAmf0(this EndianBinaryWriter writer, List<object> objList, int startIndex = 0)
         {
             int index = 0;
@@ -105,6 +141,10 @@
             }
         }
 
+        /// <summary>
+        /// Write AMF0 encoded null
+        /// </summary>
+        /// <param name="writer">Binary writer to use</param>
         public static void WriteAmf0Null(this EndianBinaryWriter writer)
         {
             writer.Write((byte)RtmpAmf0Types.Null);

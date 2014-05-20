@@ -8,8 +8,17 @@
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// RTMP message "AMF0 encoded data". Used to store and generate metadata.
+    /// For now we support only @setDataFrame/onMetaData containing media streams description
+    /// and onFI containing timestamp synchronization data.
+    /// </summary>
     public class RtmpMessageMetadata : RtmpMessage
     {
+        /// <summary>
+        /// Creates new instance of RtmpMessageMetadata
+        /// </summary>
+        /// <param name="parameters">Parsed parameters</param>
         public RtmpMessageMetadata(List<object> parameters)
         {
             this.Parameters = parameters;
@@ -53,10 +62,20 @@
             }
         }
 
+        /// <summary>
+        /// Gets or sets metadata parameters
+        /// </summary>
         public List<object> Parameters { get; set; }
 
+        /// <summary>
+        /// Gets or sets first index of Parameters containing the real metadata
+        /// </summary>
         public int FirstDataIndex { get; set; }
 
+        /// <summary>
+        /// Converts current object to RTMP chunk and returns packet buffer containing it
+        /// </summary>
+        /// <returns>Packet buffer containing the converted RTMP chunk</returns>
         public override PacketBuffer ToRtmpChunk()
         {
             RtmpChunkHeader hdr = new RtmpChunkHeader
@@ -80,6 +99,11 @@
             return packet;
         }
 
+        /// <summary>
+        /// Converts current object to FLV tag and returns packet buffer containing it.
+        /// Method should be overridden in a child class.
+        /// </summary>
+        /// <returns>Packet buffer containing the converted FLV tag</returns>
         public override PacketBuffer ToFlvTag()
         {
             FlvTagHeader hdr = new FlvTagHeader
@@ -101,6 +125,12 @@
             return packet;
         }
 
+        /// <summary>
+        /// Creates message body
+        /// </summary>
+        /// <param name="hdrSize">Header size</param>
+        /// <param name="totalSize">Total message size</param>
+        /// <returns>Packet buffer containing the message body and reserved space for a header</returns>
         private PacketBuffer createBody(int hdrSize, ref int totalSize)
         {
             PacketBuffer packet = Global.Allocator.LockBuffer();

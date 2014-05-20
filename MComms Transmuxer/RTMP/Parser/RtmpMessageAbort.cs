@@ -8,8 +8,15 @@
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// RTMP message "Abort"
+    /// </summary>
     public class RtmpMessageAbort : RtmpMessage
     {
+        /// <summary>
+        /// Creates new instance of RtmpMessageAbort
+        /// </summary>
+        /// <param name="targetChunkStreamId">Target chunk stream id which has to be aborted</param>
         public RtmpMessageAbort(int targetChunkStreamId)
         {
             this.TargetChunkStreamId = targetChunkStreamId;
@@ -17,8 +24,15 @@
             this.MessageType = RtmpIntMessageType.ProtoControlAbort;
         }
 
+        /// <summary>
+        /// Gets or sets chunk stream id which has to be aborted
+        /// </summary>
         public int TargetChunkStreamId { get; set; }
 
+        /// <summary>
+        /// Converts current object to RTMP chunk and returns packet buffer containing it
+        /// </summary>
+        /// <returns>Packet buffer containing the converted RTMP chunk</returns>
         public override PacketBuffer ToRtmpChunk()
         {
             // we need only one chunk for this message

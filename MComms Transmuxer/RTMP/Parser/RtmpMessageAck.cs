@@ -8,8 +8,15 @@
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// RTMP message "Aknowledgement"
+    /// </summary>
     public class RtmpMessageAck : RtmpMessage
     {
+        /// <summary>
+        /// Creates new instance of RtmpMessageAck
+        /// </summary>
+        /// <param name="receivedBytes">Reported received bytes count</param>
         public RtmpMessageAck(uint receivedBytes)
         {
             this.ReceivedBytes = receivedBytes;
@@ -17,8 +24,15 @@
             this.MessageType = RtmpIntMessageType.ProtoControlAknowledgement;
         }
 
+        /// <summary>
+        /// Gets or sets received bytes count as reported by peer
+        /// </summary>
         public uint ReceivedBytes { get; set; }
 
+        /// <summary>
+        /// Converts current object to RTMP chunk and returns packet buffer containing it
+        /// </summary>
+        /// <returns>Packet buffer containing the converted RTMP chunk</returns>
         public override PacketBuffer ToRtmpChunk()
         {
             // we need only one chunk for this message

@@ -8,8 +8,14 @@
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// RTMP message "UserControl"
+    /// </summary>
     public class RtmpMessageUserControl : RtmpMessage
     {
+        /// <summary>
+        /// Event types
+        /// </summary>
         public enum EventTypes : ushort
         {
             StreamBegin = 0x00,
@@ -21,6 +27,11 @@
             PingResponse = 0x07,
         }
 
+        /// <summary>
+        /// Creates new instance of RtmpMessageUserControl
+        /// </summary>
+        /// <param name="eventType">Specified event type</param>
+        /// <param name="targetMessageStreamId">Specified target message stream id</param>
         public RtmpMessageUserControl(EventTypes eventType, int targetMessageStreamId)
         {
             this.EventType = eventType;
@@ -29,6 +40,12 @@
             this.OrigMessageType = RtmpMessageType.UserControl;
         }
 
+        /// <summary>
+        /// Creates new instance of RtmpMessageUserControl
+        /// </summary>
+        /// <param name="eventType">Specified event type</param>
+        /// <param name="targetMessageStreamId">Specified target message stream id</param>
+        /// <param name="bufferLength">Specified buffer length</param>
         public RtmpMessageUserControl(EventTypes eventType, int targetMessageStreamId, uint bufferLength)
         {
             this.EventType = eventType;
@@ -38,6 +55,11 @@
             this.OrigMessageType = RtmpMessageType.UserControl;
         }
 
+        /// <summary>
+        /// Creates new instance of RtmpMessageUserControl
+        /// </summary>
+        /// <param name="eventType">Specified event type</param>
+        /// <param name="timestamp">Specified timestamp</param>
         public RtmpMessageUserControl(EventTypes eventType, uint timestamp)
         {
             this.EventType = eventType;
@@ -46,14 +68,30 @@
             this.OrigMessageType = RtmpMessageType.UserControl;
         }
 
+        /// <summary>
+        /// Gets or sets event type
+        /// </summary>
         public EventTypes EventType { get; set; }
 
+        /// <summary>
+        /// Gets or sets target message stream id
+        /// </summary>
         public int TargetMessageStreamId { get; set; }
 
+        /// <summary>
+        /// Gets or sets buffer length
+        /// </summary>
         public uint BufferLength { get; set; }
 
+        /// <summary>
+        /// Gets or sets ping timestamp
+        /// </summary>
         public uint PingTimestamp { get; set; }
 
+        /// <summary>
+        /// Converts current object to RTMP chunk and returns packet buffer containing it
+        /// </summary>
+        /// <returns>Packet buffer containing the converted RTMP chunk</returns>
         public override PacketBuffer ToRtmpChunk()
         {
             // we need only one chunk for this message

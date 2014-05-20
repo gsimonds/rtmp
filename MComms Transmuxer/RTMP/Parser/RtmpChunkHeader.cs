@@ -8,8 +8,16 @@
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// RTMP chunk header. Used to parse and generate RTMP chunk header
+    /// </summary>
     public class RtmpChunkHeader
     {
+        #region Constructor
+
+        /// <summary>
+        /// Creates new instance of RtmpChunkHeader
+        /// </summary>
         public RtmpChunkHeader()
         {
             this.Timestamp = -1;
@@ -19,23 +27,48 @@
             this.MessageStreamId = -1;
         }
 
+        #endregion
+
+        #region Public properties
+
+        /// <summary>
+        /// Gets or sets chunk format. Can be 0, 1, 2 or 3.
+        /// </summary>
         public byte Format { get; set; }
 
+        /// <summary>
+        /// Gets or sets chunk stream id
+        /// </summary>
         public uint ChunkStreamId { get; set; }
 
         /// <summary>
-        /// Timestamp or timestamp delta depending on chunk format
+        /// Gets or sets chunk timestamp
         /// </summary>
         public long Timestamp { get; set; }
 
+        /// <summary>
+        /// Gets or sets chunk timestamp delta
+        /// </summary>
         public long TimestampDelta { get; set; }
 
+        /// <summary>
+        /// Gets or sets total length of the message current chunk belongs to
+        /// </summary>
         public int MessageLength { get; set; }
 
+        /// <summary>
+        /// Gets or sets type of the message current chunk belongs to
+        /// </summary>
         public RtmpMessageType MessageType { get; set; }
 
+        /// <summary>
+        /// Gets or sets message stream id current chunk belongs to
+        /// </summary>
         public int MessageStreamId { get; set; }
 
+        /// <summary>
+        /// Gets chunk header size
+        /// </summary>
         public int HeaderSize
         {
             get
@@ -81,6 +114,15 @@
             }
         }
 
+        #endregion
+
+        #region Public methods
+
+        /// <summary>
+        /// Decodes chunk header from the specified stream
+        /// </summary>
+        /// <param name="dataStream">Stream to read data from</param>
+        /// <returns>New chunk header if it was decoded, null otherwise</returns>
         public static RtmpChunkHeader Decode(PacketBufferStream dataStream)
         {
             if (dataStream.Length < 1)
@@ -193,12 +235,21 @@
             return hdr;
         }
 
+        /// <summary>
+        /// Converts current object to a byte array and returns packet buffer containing it
+        /// </summary>
+        /// <returns>Packet buffer containing the converted byte array</returns>
         public PacketBuffer ToPacketBuffer()
         {
             PacketBuffer packet = Global.Allocator.LockBuffer();
             return ToPacketBuffer(packet);
         }
 
+        /// <summary>
+        /// Converts current object to a byte array and returns packet buffer containing it
+        /// </summary>
+        /// <param name="packet">Packet buffer to write byte data to</param>
+        /// <returns>Packet buffer (the same as specified in parameter packet) containing the converted byte array</returns>
         public PacketBuffer ToPacketBuffer(PacketBuffer packet)
         {
             packet.ActualBufferSize = this.HeaderSize;
@@ -260,5 +311,7 @@
 
             return packet;
         }
+
+        #endregion
     }
 }

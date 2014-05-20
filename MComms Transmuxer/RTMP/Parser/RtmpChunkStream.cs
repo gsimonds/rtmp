@@ -9,18 +9,63 @@
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// RTMP chunk stream. Contains context of the current chunk stream
+    /// to fill up the omitted data in compressed chunk header
+    /// </summary>
     public class RtmpChunkStream
     {
+        #region Private constants and fields
+
+        /// <summary>
+        /// Chunk stream id
+        /// </summary>
         private uint chunkStreamId;
+
+        /// <summary>
+        /// Current timestamp
+        /// </summary>
         private long timestamp = -1;
+
+        /// <summary>
+        /// Current timestamp delta
+        /// </summary>
         private long timestampDelta = -1;
+
+        /// <summary>
+        /// Current message length
+        /// </summary>
         private int messageLength = -1;
+
+        /// <summary>
+        /// Current message type
+        /// </summary>
         private RtmpMessageType messageType = RtmpMessageType.Undefined;
 
-        private PacketBuffer incompletePacketBuffer = null;
-        private PacketBufferStream incompleteMessageStream = null;
+        /// <summary>
+        /// Chunk header of currently assembling RTMP message
+        /// </summary>
         private RtmpChunkHeader incompleteMessageChunkHeader = null;
 
+        /// <summary>
+        /// Stream containing currently assembling RTMP message
+        /// </summary>
+        private PacketBufferStream incompleteMessageStream = null;
+
+        /// <summary>
+        /// Underlying packet buffer containing currently assembling RTMP message
+        /// </summary>
+        private PacketBuffer incompletePacketBuffer = null;
+
+        #endregion
+
+        #region Constructor
+
+        /// <summary>
+        /// Creates new instance of RtmpChunkStream with specified chunk stream id and chunk size
+        /// </summary>
+        /// <param name="chunkStreamId">Chunk stream id</param>
+        /// <param name="chunkSize">Chunk size</param>
         public RtmpChunkStream(uint chunkStreamId, int chunkSize)
         {
             this.chunkStreamId = chunkStreamId;
@@ -28,10 +73,31 @@
             this.MessageStreamId = -1;
         }
 
+        #endregion
+
+        #region Public properties and methods
+
+        /// <summary>
+        /// Gets or sets chunk size of the current chunk stream.
+        /// It can be changed dynamically by the streamer
+        /// </summary>
         public int ChunkSize { get; set; }
 
+        /// <summary>
+        /// Gets or sets message stream id associated with current chunk stream
+        /// </summary>
         public int MessageStreamId { get; set; }
 
+        /// <summary>
+        /// Decodes RTMP message from specified stream using provided chunk header
+        /// </summary>
+        /// <param name="hdr">Current chunk header</param>
+        /// <param name="dataStream">Stream to read data from</param>
+        /// <param name="canContinue">Can we continue parsing, i.e. do we have enough data in the stream to parse at least one more chunk</param>
+        /// <returns>
+        /// New RTMP message if parsing was successful, null otherwise.
+        /// If null returned then it means we need more input data.
+        /// </returns>
         public RtmpMessage Decode(RtmpChunkHeader hdr, PacketBufferStream dataStream, ref bool canContinue)
         {
             // apply/save chunk stream context
@@ -158,7 +224,7 @@
                     this.incompletePacketBuffer = Global.MediaAllocator.LockBuffer();
                     this.incompletePacketBuffer.ActualBufferSize = this.incompletePacketBuffer.Size;
                     this.incompleteMessageStream = new PacketBufferStream(this.incompletePacketBuffer);
-                    this.incompleteMessageStream.OneMessageStream = true;
+                    this.incompleteMessageStream.OneMessage = true;
                     this.incompleteMessageChunkHeader = hdr;
 
                     // this is the first chunk of the message, add delta to timestamp if it was specified
@@ -204,6 +270,9 @@
             return msg;
         }
 
+        /// <summary>
+        /// Abort current chunk stream, i.e. reset currently receiving RTMP message
+        /// </summary>
         public void Abort()
         {
             if (this.incompleteMessageStream != null)
@@ -213,5 +282,7 @@
                 this.incompleteMessageChunkHeader = null;
             }
         }
+
+        #endregion
     }
 }

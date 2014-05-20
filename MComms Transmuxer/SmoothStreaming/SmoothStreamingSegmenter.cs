@@ -11,16 +11,56 @@
     using MComms_Transmuxer.Common;
     using MComms_Transmuxer.RTMP;
 
+    /// <summary>
+    /// Smooth streaming segmenter prepares segments, handles synchronization on stream re-connection
+    /// </summary>
     public class SmoothStreamingSegmenter : IDisposable
     {
+        #region Private constants and fields
+
+        /// <summary>
+        /// Pointer to unmanaged buffer used to communicate with unmanaged SSF SDK wrapper
+        /// </summary>
         private IntPtr mediaDataPtr = IntPtr.Zero;
+
+        /// <summary>
+        /// Unmanaged buffer size
+        /// </summary>
         private int mediaDataPtrSize = 0;
+
+        /// <summary>
+        /// Publish URI
+        /// </summary>
         private string publishUri = null;
+
+        /// <summary>
+        /// Smooth streaming publisher
+        /// </summary>
         private SmoothStreamingPublisher publisher = null;
+
+        /// <summary>
+        /// Map from stream GUID to muxer's stream id
+        /// </summary>
         private Dictionary<Guid, int> publishStreamId2MuxerStreamId = new Dictionary<Guid, int>();
+
+        /// <summary>
+        /// Whether we're synchronized
+        /// </summary>
         private bool synchronized = false;
+
+        /// <summary>
+        /// Current timestamp offset
+        /// </summary>
         private long timestampOffset = 0;
 
+        #endregion
+
+        #region Constructor
+
+        /// <summary>
+        /// Creates new instance of SmoothStreamingSegmenter
+        /// </summary>
+        /// <param name="publishUri">Publish URI</param>
         public SmoothStreamingSegmenter(string publishUri)
         {
             this.mediaDataPtrSize = Global.MediaAllocator.BufferSize;
@@ -28,6 +68,8 @@
             this.publishUri = publishUri;
             this.publisher = SmoothStreamingPublisher.Create(this.publishUri);
         }
+
+        #endregion
 
         #region IDisposable
 
@@ -45,6 +87,13 @@
 
         #endregion
 
+        #region Public methods
+
+        /// <summary>
+        /// Registers new stream with specified media type
+        /// </summary>
+        /// <param name="mediaType">Media type to register</param>
+        /// <returns>Registered stream GUID</returns>
         public Guid RegisterStream(MediaType mediaType)
         {
             int streamId = -1;
@@ -189,6 +238,16 @@
             return publishStreamId;
         }
 
+        /// <summary>
+        /// Prepares segment and pushes media data to publisher when segment is ready
+        /// </summary>
+        /// <param name="publishStreamId">Stream GUID</param>
+        /// <param name="absoluteTime">Current system time</param>
+        /// <param name="timestamp">Current timestamp</param>
+        /// <param name="keyFrame">Is it keyframe</param>
+        /// <param name="buffer">Buffer with media data</param>
+        /// <param name="offset">Buffer offset</param>
+        /// <param name="length">Buffer length</param>
         public void PushMediaData(Guid publishStreamId, DateTime absoluteTime, long timestamp, bool keyFrame, byte[] buffer, int offset, int length)
         {
             int muxId = -1;
@@ -277,6 +336,10 @@
             }
         }
 
+        /// <summary>
+        /// Adjusts timestamp offset after timestamps were re-synchronized in RTMP message stream
+        /// </summary>
+        /// <param name="gap"></param>
         public void AdjustAbsoluteTime(long gap)
         {
             if (this.timestampOffset != 0)
@@ -286,6 +349,17 @@
             }
         }
 
+        #endregion
+
+        #region Private methods
+
+        /// <summary>
+        /// Corrects header data received from SSF SDK
+        /// </summary>
+        /// <param name="origHeader">Original header</param>
+        /// <param name="properHeader">Proper header</param>
+        /// <param name="streamId">Stream id</param>
+        /// <param name="mediaType">Media type</param>
         private void CorrectHeader(PacketBuffer origHeader, PacketBuffer properHeader, int streamId, MediaType mediaType)
         {
             long nStreamSMILPos = 0;
@@ -572,8 +646,13 @@
             }
         }
 
+        #endregion
+
         #region Unmanaged interface to MCommsSSFSDK
 
+        /// <summary>
+        /// WAVEFORMATEX structure
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         private struct WAVEFORMATEX
         {
@@ -586,6 +665,9 @@
             public ushort cbSize;
         }
 
+        /// <summary>
+        /// RECT structure
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         private struct RECT
         {
@@ -595,6 +677,9 @@
             public Int32 bottom;
         }
 
+        /// <summary>
+        /// BITMAPINFOHEADER structure
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         private struct BITMAPINFOHEADER
         {
@@ -611,6 +696,9 @@
             public UInt32 biClrImportant;
         }
 
+        /// <summary>
+        /// VIDEOINFOHEADER2 structure
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         private struct VIDEOINFOHEADER2
         {
@@ -628,6 +716,9 @@
             public BITMAPINFOHEADER bmiHeader;
         }
 
+        /// <summary>
+        /// MPEG2VIDEOINFO structure
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         private struct MPEG2VIDEOINFO
         {
@@ -639,9 +730,23 @@
             public UInt32 dwFlags;
         }
 
+        /// <summary>
+        /// Initializes new muxer session
+        /// </summary>
+        /// <returns>Mux id</returns>
         [DllImport("MCommsSSFSDK.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int MCSSF_Initialize();
 
+        /// <summary>
+        /// Adds new stream to amux
+        /// </summary>
+        /// <param name="muxId">Mux id</param>
+        /// <param name="streamType">Stream type</param>
+        /// <param name="bitrate">Bitrate</param>
+        /// <param name="language">Language</param>
+        /// <param name="extraDataSize">Codec private data size</param>
+        /// <param name="extraData">Codec private data</param>
+        /// <returns>Stream id</returns>
         [DllImport("MCommsSSFSDK.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int MCSSF_AddStream(
             [In] Int32 muxId,
@@ -651,6 +756,14 @@
             [In] Int32 extraDataSize,
             [In] IntPtr extraData);
 
+        /// <summary>
+        /// Gets stream header
+        /// </summary>
+        /// <param name="muxId">Mux id</param>
+        /// <param name="streamId">Stream id</param>
+        /// <param name="dataSize">Header data size</param>
+        /// <param name="data">Header data</param>
+        /// <returns>Less than zero if error, 1 if success</returns>
         [DllImport("MCommsSSFSDK.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int MCSSF_GetHeader(
             [In] Int32 muxId,
@@ -658,6 +771,19 @@
             [Out] out Int32 dataSize,
             [Out] out IntPtr data);
 
+        /// <summary>
+        /// Adds new media data to segment
+        /// </summary>
+        /// <param name="muxId">Mux id</param>
+        /// <param name="streamId">Stream id</param>
+        /// <param name="startTime">Start time</param>
+        /// <param name="stopTime">Stop time</param>
+        /// <param name="keyFrame">Is key frame</param>
+        /// <param name="sampleDataSize">Sample data size</param>
+        /// <param name="sampleData">Sample data</param>
+        /// <param name="outputDataSize">Segment data size, can be 0</param>
+        /// <param name="outputData">Segment data, can be IntPtr.Zero</param>
+        /// <returns>Less than zero if error, 0 if segment is not readyyet, 1 if segment is ready</returns>
         [DllImport("MCommsSSFSDK.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern int MCSSF_PushMedia(
             [In] Int32 muxId,
@@ -670,6 +796,14 @@
             [Out] out Int32 outputDataSize,
             [Out] out IntPtr outputData);
 
+        /// <summary>
+        /// Gets stream index data
+        /// </summary>
+        /// <param name="muxId">Mux id</param>
+        /// <param name="streamId">Stream id</param>
+        /// <param name="dataSize">Data size</param>
+        /// <param name="data">Data</param>
+        /// <returns>Less than zero if error, 1 if success</returns>
         [DllImport("MCommsSSFSDK.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern int MCSSF_GetIndex(
             [In] Int32 muxId,
@@ -677,6 +811,11 @@
             [Out] out Int32 dataSize,
             [Out] out IntPtr data);
 
+        /// <summary>
+        /// Releases all resources associated with specified mux id
+        /// </summary>
+        /// <param name="muxId">Mux id to release</param>
+        /// <returns>1 if released, 0 if nothing to release (already released)</returns>
         [DllImport("MCommsSSFSDK.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int MCSSF_Uninitialize([In] Int32 muxId);
 

@@ -3,6 +3,9 @@
     using System;
     using System.Diagnostics;
 
+    /// <summary>
+    /// Statistics class to handle perf counters
+    /// </summary>
     public class Statistics
     {
         private const string categoryName = "MComms Transmuxer";
@@ -89,6 +92,11 @@
             }
         }
 
+        /// <summary>
+        /// Adds network info to performance counters
+        /// </summary>
+        /// <param name="numberOfConnections">Current number of connections</param>
+        /// <param name="totalBandwidth">Current bandwidth</param>
         public void CollectNetworkInfo(int numberOfConnections, int totalBandwidth)
         {
             if (perfCountNumberOfConnection != null)

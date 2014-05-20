@@ -5,18 +5,52 @@
     using System.Linq;
     using System.Text;
 
+    /// <summary>
+    /// Extensions for SortedList class
+    /// </summary>
     public static class SortedListExtension
     {
+        /// <summary>
+        /// Find first index of the key which is less or equal to the specified key
+        /// </summary>
+        /// <typeparam name="T">SortedList's key type</typeparam>
+        /// <typeparam name="U">SortedList's value type</typeparam>
+        /// <param name="sortedList">Sorted list to find data in</param>
+        /// <param name="key">Key to find</param>
+        /// <returns>
+        /// Index of the found key. If key parameter is less than the list's first key then -1 will be returned
+        /// </returns>
         public static int FindFirstIndexLessThanOrEqualTo<T, U>(this SortedList<T, U> sortedList, T key)
         {
             return BinarySearch(sortedList.Keys, key, true);
         }
 
+        /// <summary>
+        /// Find first index of the key which is greater than the specified value
+        /// </summary>
+        /// <typeparam name="T">SortedList's key type</typeparam>
+        /// <typeparam name="U">SortedList's value type</typeparam>
+        /// <param name="sortedList">Sorted list to find data in</param>
+        /// <param name="key">Key to find</param>
+        /// <returns>
+        /// Index of the found key. If key parameter is more than the list's first key then sortedList.Count will be returned
+        /// </returns>
         public static int FindFirstIndexGreaterThan<T, U>(this SortedList<T, U> sortedList, T key)
         {
             return BinarySearch(sortedList.Keys, key, false);
         }
 
+        /// <summary>
+        /// Performs binary search in the specified sorted list
+        /// </summary>
+        /// <typeparam name="T">List's value type</typeparam>
+        /// <param name="list">Sorted list to find data in</param>
+        /// <param name="value">Value to find</param>
+        /// <param name="lessOrEqual">
+        /// True if the found value has to be less or equal than value to find.
+        /// False if the found value has to be greater than value to find.
+        /// </param>
+        /// <returns>Index of the found value.</returns>
         private static int BinarySearch<T>(IList<T> list, T value, bool lessOrEqual)
         {
             if (list == null) throw new ArgumentNullException("list");

@@ -8,20 +8,53 @@
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// RTMP handshake. Used to parse, generate and validate RTMP handshake messages
+    /// </summary>
     public class RtmpHandshake : RtmpMessage
     {
+        #region Constructor
+
+        /// <summary>
+        /// Creates new instance of RtmpHandshake
+        /// </summary>
         public RtmpHandshake()
         {
         }
 
+        #endregion
+
+        #region Public properties
+
+        /// <summary>
+        /// Gets or sets RTMP version
+        /// </summary>
         public byte Version { get; set; }
 
+        /// <summary>
+        /// Gets or sets time
+        /// </summary>
         public uint Time { get; set; }
 
+        /// <summary>
+        /// Gets or sets time2
+        /// </summary>
         public uint Time2 { get; set; }
 
+        /// <summary>
+        /// Gets or sets random bytes
+        /// </summary>
         public byte[] RandomBytes { get; set; }
 
+        #endregion
+
+        #region Public static methods
+
+        /// <summary>
+        /// Decodes C0 message from specified stream
+        /// </summary>
+        /// <param name="dataStream">Stream to read data from</param>
+        /// <returns>Decoded C0 message</returns>
         public static RtmpHandshake DecodeC0(PacketBufferStream dataStream)
         {
             if (dataStream.Length == 0)
@@ -42,6 +75,11 @@
             }
         }
 
+        /// <summary>
+        /// Decodes C1 message from specified stream
+        /// </summary>
+        /// <param name="dataStream">Stream to read data from</param>
+        /// <returns>Decoded C1 message</returns>
         public static RtmpHandshake DecodeC1(PacketBufferStream dataStream)
         {
             if (dataStream.Length < Global.RtmpHandshakeSize)
@@ -70,6 +108,11 @@
             }
         }
 
+        /// <summary>
+        /// Decodes C2 message from specified stream
+        /// </summary>
+        /// <param name="dataStream">Stream to read data from</param>
+        /// <returns>Decoded C2 message</returns>
         public static RtmpHandshake DecodeC2(PacketBufferStream dataStream)
         {
             if (dataStream.Length < Global.RtmpHandshakeSize)
@@ -98,6 +141,10 @@
             }
         }
 
+        /// <summary>
+        /// Generates S0 message
+        /// </summary>
+        /// <returns>Generated S0 message</returns>
         public static RtmpHandshake GenerateS0()
         {
             RtmpHandshake handshake = new RtmpHandshake();
@@ -106,6 +153,10 @@
             return handshake;
         }
 
+        /// <summary>
+        /// Generates S1 message
+        /// </summary>
+        /// <returns>Generated S1 message</returns>
         public static RtmpHandshake GenerateS1()
         {
             RtmpHandshake handshake = new RtmpHandshake();
@@ -120,16 +171,15 @@
             return handshake;
         }
 
-        public RtmpHandshake GenerateS2()
-        {
-            RtmpHandshake handshake = new RtmpHandshake();
-            handshake.MessageType = RtmpIntMessageType.HandshakeS2;
-            handshake.Time = this.Time;
-            handshake.Time2 = 0;
-            handshake.RandomBytes = this.RandomBytes;
-            return handshake;
-        }
+        #endregion
 
+        #region Public methods
+
+        /// <summary>
+        /// Validates current C2 message based on previously sent S1 message
+        /// </summary>
+        /// <param name="handshakeS1">S1 message to use for validation</param>
+        /// <returns>True if C2 message is valid, false otherwise</returns>
         public bool ValidateC2(RtmpHandshake handshakeS1)
         {
             if (this.Time != handshakeS1.Time)
@@ -148,6 +198,24 @@
             return true;
         }
 
+        /// <summary>
+        /// Generates S2 message from current C2 message
+        /// </summary>
+        /// <returns>Generated S2 message</returns>
+        public RtmpHandshake GenerateS2()
+        {
+            RtmpHandshake handshake = new RtmpHandshake();
+            handshake.MessageType = RtmpIntMessageType.HandshakeS2;
+            handshake.Time = this.Time;
+            handshake.Time2 = 0;
+            handshake.RandomBytes = this.RandomBytes;
+            return handshake;
+        }
+
+        /// <summary>
+        /// Converts current object to RTMP chunk and returns packet buffer containing it
+        /// </summary>
+        /// <returns>Packet buffer containing the converted RTMP chunk</returns>
         public override PacketBuffer ToRtmpChunk()
         {
             PacketBuffer packet = null;
@@ -190,5 +258,7 @@
 
             return packet;
         }
+
+        #endregion
     }
 }

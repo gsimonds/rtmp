@@ -13,46 +13,161 @@
     using MComms_Transmuxer.Common;
     using MComms_Transmuxer.SmoothStreaming;
 
+    /// <summary>
+    /// Critical stream exception, current RTMP session must be closed
+    /// </summary>
     public class CriticalStreamException : Exception
     {
+        /// <summary>
+        /// Creates new instance of CriticalStreamException
+        /// </summary>
+        /// <param name="message">Exception message</param>
         public CriticalStreamException(string message)
             : base(message)
         {
         }
     }
 
+    /// <summary>
+    /// RTMP message stream. Used for message stream related operations:
+    /// parse metadata and prepare stream media types,
+    /// create and maintain smooth streaming segmenter,
+    /// perform onFI-based synchronization,
+    /// dump data to FLV file if necessary
+    /// </summary>
     public class RtmpMessageStream : IDisposable
     {
+        #region Private constants and fields
+
+        /// <summary>
+        /// Video media type, can be null if there is no video
+        /// </summary>
         private MediaType videoMediaType = null;
+
+        /// <summary>
+        /// Audio media type, can be null if there is no audio
+        /// </summary>
         private MediaType audioMediaType = null;
+
+        /// <summary>
+        /// Whether we're waiting for the first video frame
+        /// </summary>
         private bool firstVideoFrame = true;
+
+        /// <summary>
+        /// Whether we're waiting for the first audio frame
+        /// </summary>
         private bool firstAudioFrame = true;
+
+        /// <summary>
+        /// Video stream GUID as registered by segmenter
+        /// </summary>
         private Guid videoStreamId = Guid.Empty;
+
+        /// <summary>
+        /// Audio stream GUID as registered by segmenter
+        /// </summary>
         private Guid audioStreamId = Guid.Empty;
+
+        /// <summary>
+        /// Smooth streaming segmenter
+        /// </summary>
         private SmoothStreamingSegmenter segmenter = null;
+
+        /// <summary>
+        /// Publish name, usually RTMP publish name without trailing number
+        /// </summary>
         private string publishName = null;
+
+        /// <summary>
+        /// Fully qualified publish URI including server name + stream name + .isml
+        /// </summary>
         private string publishUri = null;
+
+        /// <summary>
+        /// Whether we're publishing or not
+        /// </summary>
         private bool publishing = false;
 
+        // FLV related
+
+        /// <summary>
+        /// Whether dump to FLV file enabled or not
+        /// </summary>
         private bool flvDump = Properties.Settings.Default.EnableFlvDump;
+
+        /// <summary>
+        /// Path to FLV dump file
+        /// </summary>
         private string flvDumpPath = null;
+
+        /// <summary>
+        /// FLV file stream
+        /// </summary>
         private FileStream flvDumpStream = null;
+
+        /// <summary>
+        /// FLV first timestamp
+        /// </summary>
         private long flvFirstTimestamp = -1;
+
+        /// <summary>
+        /// Stored metadata message
+        /// </summary>
         private RtmpMessageMetadata metadataMessage = null;
 
+        // Timestamp synchronization related
+
+        /// <summary>
+        /// System time of the first timestamp synchronization
+        /// </summary>
         private long timestampFirstSync = long.MinValue;
-        private long timestampSync = long.MinValue;
-        private long timestampAdjust = 0;
+
+        /// <summary>
+        /// Absolute time origin of the RTMP stream (taken from onFI)
+        /// </summary>
         private DateTime absoluteTimeOrigin = DateTime.Now;
+
+        /// <summary>
+        /// Gap between absolute time and stream timestamp
+        /// </summary>
+        private long timestampSync = long.MinValue;
+
+        /// <summary>
+        /// Timestamp adjustment we're adding to stream timestamp.
+        /// </summary>
+        private long timestampAdjust = 0;
+
+        /// <summary>
+        /// Whether we're waiting for the first timestamp
+        /// </summary>
         private bool firstTimestamp = true;
 
+        #endregion
+
+        #region Constructor
+
+        /// <summary>
+        /// Creates new instance of RtmpMessageStream
+        /// </summary>
+        /// <param name="messageStreamId">Message stream id</param>
         public RtmpMessageStream(int messageStreamId)
         {
             this.MessageStreamId = messageStreamId;
         }
 
+        #endregion
+
+        #region Public properties
+
+        /// <summary>
+        /// Gets or sets message stream id
+        /// </summary>
         public int MessageStreamId { get; set; }
 
+        /// <summary>
+        /// Gets or sets publish name (usually RTMP publish name without trailing number)
+        /// </summary>
         public string PublishName
         {
             get
@@ -67,8 +182,14 @@
             }
         }
 
+        /// <summary>
+        /// Gets or sets full publish name (RTMP publish name without modifications)
+        /// </summary>
         public string FullPublishName { get; set; }
 
+        /// <summary>
+        /// Gets or sets whether we're publishing or not
+        /// </summary>
         public bool Publishing
         {
             get
@@ -96,10 +217,12 @@
             }
         }
 
+        #endregion
+
         #region IDisposable
 
         /// <summary>
-        /// Disposes the segmenter.
+        /// Disposes the resources
         /// </summary>
         public void Dispose()
         {
@@ -120,6 +243,12 @@
 
         #endregion
 
+        #region Public methods
+
+        /// <summary>
+        /// Processes stream metadata
+        /// </summary>
+        /// <param name="msg">Received metadata message</param>
         public void ProcessMetadata(RtmpMessageMetadata msg)
         {
             switch (msg.MessageType)
@@ -144,6 +273,10 @@
             }
         }
 
+        /// <summary>
+        /// Processes stream media data
+        /// </summary>
+        /// <param name="msg">Media data message</param>
         public void ProcessMediaData(RtmpMessageMedia msg)
         {
             if (this.segmenter == null)
@@ -242,6 +375,14 @@
             }
         }
 
+        #endregion
+
+        #region Private methods
+
+        /// <summary>
+        /// Processes audio data
+        /// </summary>
+        /// <param name="msg">Received audio message</param>
         private void ProcessAudioData(RtmpMessageMedia msg)
         {
             if (msg.AudioCodec != RtmpAudioCodec.AAC)
@@ -330,6 +471,10 @@
             }
         }
 
+        /// <summary>
+        /// Processes video data
+        /// </summary>
+        /// <param name="msg">Received video message</param>
         private void ProcessVideoData(RtmpMessageMedia msg)
         {
             if (msg.VideoCodec != RtmpVideoCodec.AVC)
@@ -418,6 +563,10 @@
             }
         }
 
+        /// <summary>
+        /// Processes stream metadata
+        /// </summary>
+        /// <param name="msg">Received metadata message</param>
         private void ProcessStreamMetadata(RtmpMessageMetadata msg)
         {
             // store it for flv dump
@@ -587,6 +736,10 @@
             }
         }
 
+        /// <summary>
+        /// Processes stream timestamps
+        /// </summary>
+        /// <param name="msg">Received onFI message</param>
         private void ProcessTimestamp(RtmpMessageMetadata msg)
         {
             RtmpAmfObject timestampData = (RtmpAmfObject)msg.Parameters[msg.FirstDataIndex];
@@ -710,5 +863,7 @@
                 }
             }
         }
+
+        #endregion
     }
 }

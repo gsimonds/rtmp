@@ -65,7 +65,6 @@
     <Compile Include="Common\MediaContentType.cs" />
     <Compile Include="Common\PacketBufferAllocator.cs" />
     <Compile Include="Common\PacketBuffer.cs" />
-    <Compile Include="Common\MediaPacket.cs" />
     <Compile Include="Common\MediaType.cs" />
     <Compile Include="Common\PacketBufferStream.cs" />
     <Compile Include="Common\SortedListExtension.cs" />

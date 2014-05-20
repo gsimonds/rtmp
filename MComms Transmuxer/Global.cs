@@ -9,12 +9,34 @@ namespace MComms_Transmuxer
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// Global static data common for the whole application
+    /// </summary>
     class Global
     {
+        /// <summary>
+        /// Supported RTMP version
+        /// </summary>
         public const byte RtmpVersion = 3;
+
+        /// <summary>
+        /// RTMP handshake size
+        /// </summary>
         public const int RtmpHandshakeSize = 1536;
+
+        /// <summary>
+        /// RTMP handshake random bytes size
+        /// </summary>
         public const int RtmpHandshakeRandomBytesSize = 1528;
+
+        /// <summary>
+        /// RTMP default chunk size
+        /// </summary>
         public const int RtmpDefaultChunkSize = 128;
+
+        /// <summary>
+        /// RTMP default ack window size
+        /// </summary>
         public const int RtmpDefaultAckWindowSize = 2500000;
 
         /// <summary>
@@ -22,8 +44,14 @@ namespace MComms_Transmuxer
         /// </summary>
         public const int RtmpMaxConnections = 150;
 
+        /// <summary>
+        /// Chunk size of our messages
+        /// </summary>
         public const int RtmpOurChunkSize = 1024;
 
+        /// <summary>
+        /// Inactivity timeout after which RTMP session will be disposed
+        /// </summary>
         public const int RtmpSessionInactivityTimeoutMs = 30000;
 
         /// <summary>
@@ -42,6 +70,9 @@ namespace MComms_Transmuxer
         /// </summary>
         public const int SegmentBufferSize = 10 * 1024 * 1024;
 
+        /// <summary>
+        /// Timescale of the smooth streaming timstamps
+        /// </summary>
         public const long SmoothStreamingTimescale = 10000000;
 
         /// <summary>
@@ -65,6 +96,9 @@ namespace MComms_Transmuxer
         /// </summary>
         public static PacketBufferAllocator SegmentAllocator { get; set; }
 
+        /// <summary>
+        /// Logger
+        /// </summary>
         public static readonly log4net.ILog Log = log4net.LogManager.GetLogger(typeof(Program));
     }
 }

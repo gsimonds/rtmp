@@ -13,6 +13,9 @@
     using MComms_Transmuxer.Common;
     using MComms_Transmuxer.RTMP;
 
+    /// <summary>
+    /// Transmuxer Windows service
+    /// </summary>
     public partial class TransmuxerService : ServiceBase
     {
         RtmpServer server = null;

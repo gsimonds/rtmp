@@ -8,8 +8,15 @@
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// RTMP message "WindowAknowledgementSize"
+    /// </summary>
     public class RtmpMessageWindowAckSize : RtmpMessage
     {
+        /// <summary>
+        /// Creates new instance of RtmpMessageWindowAckSize
+        /// </summary>
+        /// <param name="ackSize">Aknowledgement size</param>
         public RtmpMessageWindowAckSize(uint ackSize)
         {
             this.AckSize = ackSize;
@@ -17,8 +24,15 @@
             this.OrigMessageType = RtmpMessageType.WindowAknowledgementSize;
         }
 
+        /// <summary>
+        /// Gets or sets aknowledgement size
+        /// </summary>
         public uint AckSize { get; set; }
 
+        /// <summary>
+        /// Converts current object to RTMP chunk and returns packet buffer containing it
+        /// </summary>
+        /// <returns>Packet buffer containing the converted RTMP chunk</returns>
         public override PacketBuffer ToRtmpChunk()
         {
             // we need only one chunk for this message

@@ -19,34 +19,67 @@
     {
         #region Constants
 
+        /// <summary>
+        /// Default maximum number of connections
+        /// </summary>
         private const int DefaultMaxConnections = 1000;
+
+        /// <summary>
+        /// Default backlog size
+        /// </summary>
         private const int DefaultBacklog = 100;
+
+        /// <summary>
+        /// Default accept's context pool size
+        /// </summary>
         private const int DefaultAcceptContextPoolSize = 10;
+
+        /// <summary>
+        /// Default send's context pool size
+        /// </summary>
         private const int DefaultSendContextPoolSize = SocketTransport.DefaultMaxConnections;
-        private const int DefaultReceiveBufferSize = 10240;
-        private const int DefaultSendBufferSize = 10240;
+
+        /// <summary>
+        /// Default receive buffer size
+        /// </summary>
+        private const int DefaultReceiveBufferSize = 8192;
+
+        /// <summary>
+        /// Default send buffer size
+        /// </summary>
+        private const int DefaultSendBufferSize = 8192;
 
         #endregion
 
         #region Private variables
 
+        /// <summary>
+        /// Server end point
+        /// </summary>
         private IPEndPoint serverEndPoint = null;
+
+        /// <summary>
+        /// Protocol type
+        /// </summary>
         private ProtocolType protocolType = ProtocolType.Unspecified;
 
+        /// <summary>
+        /// Whether transport is running
+        /// </summary>
         private volatile bool isRunning = false;
 
         /// <summary>
-        /// The maximum number of connections the sample is designed to handle simultaneously 
+        /// The maximum number of connections the object is able to handle simultaneously 
         /// </summary>
         private int maxConnections = SocketTransport.DefaultMaxConnections;
 
         /// <summary>
-        /// Max # of pending connections the listener can hold in queue
+        /// Max number of pending connections the listener can hold in queue
         /// </summary>
         private int backlog = SocketTransport.DefaultBacklog;
 
         /// <summary>
-        /// Tells us how many objects to put in pool for accept operations
+        /// How many objects to put in pool for accept operations
         /// </summary>
         private int acceptContextPoolSize = SocketTransport.DefaultAcceptContextPoolSize;
 
@@ -70,22 +103,53 @@
         /// </summary>
         private int sendBufferSize = SocketTransport.DefaultSendBufferSize;
 
+        /// <summary>
+        /// Listen socket
+        /// </summary>
         private Socket listenSocket = null;
+
+        /// <summary>
+        /// Connected clients
+        /// </summary>
         private Dictionary<IPEndPoint, ClientContext> clients = null;
 
+        /// <summary>
+        /// Receive buffer manager
+        /// </summary>
         private SocketBufferManager receiveBufferManager = null;
+
+        /// <summary>
+        /// Send buffer manager
+        /// </summary>
         private SocketBufferManager sendBufferManager = null;
 
+        /// <summary>
+        /// Accept SAEAs
+        /// </summary>
         private List<SocketAsyncEventArgs> acceptAsyncContexts = null;
+
+        /// <summary>
+        /// Receive SAEAs
+        /// </summary>
         private List<SocketAsyncEventArgs> receiveAsyncContexts = null;
+
+        /// <summary>
+        /// Send SAEAs
+        /// </summary>
         private List<SocketAsyncEventArgs> sendAsyncContexts = null;
 
+        /// <summary>
+        /// Number of sent packets
+        /// </summary>
         private int sentPackets = 0;
 
         #endregion
 
         #region Constructor
 
+        /// <summary>
+        /// Creates new instance of SocketTransport
+        /// </summary>
         public SocketTransport()
         {
             // we don't do any initialization here to allow user to customize settings
@@ -96,15 +160,33 @@
 
         #region Events
 
+        /// <summary>
+        /// Fired when new client connects
+        /// </summary>
         public event EventHandler<TransportArgs> Connected;
+
+        /// <summary>
+        /// Fired when connected client disconnects
+        /// </summary>
         public event EventHandler<TransportArgs> Disconnected;
+
+        /// <summary>
+        /// Fired when new data received
+        /// </summary>
         public event EventHandler<TransportArgs> Received;
+
+        /// <summary>
+        /// Fired when data is sent
+        /// </summary>
         public event EventHandler<TransportArgs> Sent;
 
         #endregion
 
         #region Public properties and methods
 
+        /// <summary>
+        /// Gets or sets the maximum number of connections the object is able to handle simultaneously 
+        /// </summary>
         public int MaxConnections
         {
             get
@@ -124,6 +206,9 @@
             }
         }
 
+        /// <summary>
+        /// Gets or sets the max number of pending connections the listener can hold in queue
+        /// </summary>
         public int Backlog
         {
             get
@@ -143,6 +228,9 @@
             }
         }
 
+        /// <summary>
+        /// Gets or sets how many objects to put in pool for accept operations
+        /// </summary>
         public int AcceptContextPoolSize
         {
             get
@@ -162,6 +250,9 @@
             }
         }
 
+        /// <summary>
+        /// Gets or sets maximum number of simultaneous receive operations. Normally it's equal to maxConnections
+        /// </summary>
         public int ReceiveContextPoolSize
         {
             get
@@ -181,6 +272,9 @@
             }
         }
 
+        /// <summary>
+        /// Gets or sets maximum number of simultaneous send operations.
+        /// </summary>
         public int SendContextPoolSize
         {
             get
@@ -200,6 +294,9 @@
             }
         }
 
+        /// <summary>
+        /// Gets or sets buffer size to use for each socket receive operation
+        /// </summary>
         public int ReceiveBufferSize
         {
             get
@@ -219,6 +316,9 @@
             }
         }
 
+        /// <summary>
+        /// Gets or sets buffer size to use for each socket send operation
+        /// </summary>
         public int SendBufferSize
         {
             get
@@ -238,6 +338,11 @@
             }
         }
 
+        /// <summary>
+        /// Starts the transport
+        /// </summary>
+        /// <param name="serverEndPoint">Server end point, can be null for client mode</param>
+        /// <param name="protocolType">Protocol type, can be null for client mode</param>
         public void Start(IPEndPoint serverEndPoint = null, ProtocolType protocolType = ProtocolType.Unspecified)
         {
             if (this.isRunning)
@@ -250,11 +355,20 @@
             this.Initialize();
         }
 
+        /// <summary>
+        /// Stops the transport
+        /// </summary>
         public void Stop()
         {
             this.Uninitialize();
         }
 
+        /// <summary>
+        /// Sends data to a specified end point. If specified end point is not found in
+        /// the list of active connections then exception will be thrown.
+        /// </summary>
+        /// <param name="endPoint">End point to send data to</param>
+        /// <param name="packet">Data to send</param>
         public void Send(IPEndPoint endPoint, PacketBuffer packet)
         {
             if (!this.isRunning)
@@ -299,11 +413,20 @@
             this.StartSend(sendAsyncContext);
         }
 
+        /// <summary>
+        /// Connects to specified end point in client mode with specified protocol
+        /// </summary>
+        /// <param name="endPoint">End point to connect to</param>
+        /// <param name="protocolType">Protocol to use</param>
         public void Connect(IPEndPoint endPoint, ProtocolType protocolType)
         {
             throw new NotImplementedException();
         }
 
+        /// <summary>
+        /// Disconnects specified end point
+        /// </summary>
+        /// <param name="endPoint">End point to disconnect</param>
         public void Disconnect(IPEndPoint endPoint)
         {
             if (!this.isRunning)
@@ -345,6 +468,10 @@
 
         #region Virtual methods to be overridden in inherited class
 
+        /// <summary>
+        /// Calls Connected event handlers
+        /// </summary>
+        /// <param name="endPoint">Connected end point</param>
         protected virtual void OnConnect(IPEndPoint endPoint)
         {
             if (this.Connected != null)
@@ -353,6 +480,10 @@
             }
         }
 
+        /// <summary>
+        /// Calls Disconnected event handlers
+        /// </summary>
+        /// <param name="endPoint">Disconnected end point</param>
         protected virtual void OnDisconnect(IPEndPoint endPoint)
         {
             if (this.Disconnected != null)
@@ -361,6 +492,15 @@
             }
         }
 
+        /// <summary>
+        /// By default calls Received event handler.
+        /// If client context specifies ReceiveEventHandler then it's called on priority basis.
+        /// </summary>
+        /// <param name="client">Client received data from</param>
+        /// <param name="endPoint">Client's end point</param>
+        /// <param name="data">Received data</param>
+        /// <param name="dataOffset">Data offset</param>
+        /// <param name="dataLength">Data length</param>
         protected virtual void OnReceive(ClientContext client, IPEndPoint endPoint, byte[] data, int dataOffset, int dataLength)
         {
             if (client != null && client.ReceiveEventHandler != null)
@@ -380,6 +520,11 @@
             }
         }
 
+        /// <summary>
+        /// Calls Sent event handlers
+        /// </summary>
+        /// <param name="endPoint">Client sent data to</param>
+        /// <param name="packet">Packet sent</param>
         protected virtual void OnSent(IPEndPoint endPoint, PacketBuffer packet)
         {
             if (this.Sent != null)
@@ -392,6 +537,9 @@
 
         #region Private methods
 
+        /// <summary>
+        /// Initializes transport
+        /// </summary>
         private void Initialize()
         {
             this.clients = new Dictionary<IPEndPoint, ClientContext>(this.maxConnections);
@@ -436,6 +584,9 @@
             this.isRunning = true;
         }
 
+        /// <summary>
+        /// Uninitializes transport
+        /// </summary>
         private void Uninitialize()
         {
             // this will prevent us from accepting of new connections
@@ -491,6 +642,9 @@
             this.protocolType = ProtocolType.Unspecified;
         }
 
+        /// <summary>
+        /// Starts async accept
+        /// </summary>
         private void StartAccept()
         {
             SocketAsyncEventArgs asyncContext = null;
@@ -539,6 +693,10 @@
             }
         }
 
+        /// <summary>
+        /// Processes async accept result
+        /// </summary>
+        /// <param name="asyncContext">Async context</param>
         private void ProcessAccept(SocketAsyncEventArgs asyncContext)
         {
             StartAccept(); // loopback accept
@@ -611,6 +769,10 @@
             this.StartReceive(recvAsyncContext);
         }
 
+        /// <summary>
+        /// Starts async receive
+        /// </summary>
+        /// <param name="asyncContext">Async context</param>
         private void StartReceive(SocketAsyncEventArgs asyncContext)
         {
             ClientContext client = (ClientContext)asyncContext.UserToken;
@@ -637,6 +799,10 @@
             }
         }
 
+        /// <summary>
+        /// Processes async receive result
+        /// </summary>
+        /// <param name="asyncContext">Async context</param>
         private void ProcessReceive(SocketAsyncEventArgs asyncContext)
         {
             if (!this.isRunning || asyncContext.SocketError != SocketError.Success || asyncContext.BytesTransferred == 0)
@@ -663,6 +829,10 @@
             this.StartReceive(asyncContext);
         }
 
+        /// <summary>
+        /// Starts async send
+        /// </summary>
+        /// <param name="asyncContext">Async context</param>
         private void StartSend(SocketAsyncEventArgs asyncContext)
         {
             ClientSendContext client = (ClientSendContext)asyncContext.UserToken;
@@ -700,6 +870,10 @@
             }
         }
 
+        /// <summary>
+        /// Processes async send result
+        /// </summary>
+        /// <param name="asyncContext"></param>
         private void ProcessSend(SocketAsyncEventArgs asyncContext)
         {
             ClientSendContext client = (ClientSendContext)asyncContext.UserToken;
@@ -738,6 +912,11 @@
             }
         }
 
+        /// <summary>
+        /// Disconnects specified async context
+        /// </summary>
+        /// <param name="asyncContext">Async context to disconnect</param>
+        /// <param name="receiveContext">True if it's a receive context, false if it's a send context</param>
         private void Disconnect(SocketAsyncEventArgs asyncContext, bool receiveContext)
         {
             ClientContext client = (ClientContext)asyncContext.UserToken;
@@ -797,16 +976,31 @@
 
         #region Event handlers
 
+        /// <summary>
+        /// Called when async accept completed
+        /// </summary>
+        /// <param name="sender">Sender</param>
+        /// <param name="e">Async context</param>
         void Accept_Completed(object sender, SocketAsyncEventArgs e)
         {
             this.ProcessAccept(e);
         }
 
+        /// <summary>
+        /// Called when async receive completed
+        /// </summary>
+        /// <param name="sender">Sender</param>
+        /// <param name="e">Async context</param>
         void Receive_Completed(object sender, SocketAsyncEventArgs e)
         {
             this.ProcessReceive(e);
         }
 
+        /// <summary>
+        /// Called when async send completed
+        /// </summary>
+        /// <param name="sender">Sender</param>
+        /// <param name="e">Async context</param>
         void Send_Completed(object sender, SocketAsyncEventArgs e)
         {
             this.ProcessSend(e);

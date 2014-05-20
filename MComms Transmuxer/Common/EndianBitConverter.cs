@@ -317,7 +317,7 @@ namespace MComms_Transmuxer.Common
 
         #endregion
 
-        #region	Decimal conversions
+        #region Decimal conversions
 
         /// <summary>
         /// Returns a decimal value converted from sixteen bytes 

@@ -8,25 +8,47 @@
     using System.Text;
     using System.Threading.Tasks;
 
+    /// <summary>
+    /// This class creates a single large buffer which can be divided up
+    /// and assigned to SocketAsyncEventArgs objects for use with each
+    /// socket I/O operation.
+    /// This enables buffers to be easily reused and guards against
+    /// fragmenting heap memory.
+    ///
+    /// This buffer is a byte array which the Windows TCP buffer can copy its data to.
+    /// </summary>
     internal class SocketBufferManager
     {
-        // This class creates a single large buffer which can be divided up 
-        // and assigned to SocketAsyncEventArgs objects for use with each 
-        // socket I/O operation.  
-        // This enables buffers to be easily reused and guards against 
-        // fragmenting heap memory.
-        // 
-        //This buffer is a byte array which the Windows TCP buffer can copy its data to.
-
-        // the total number of bytes controlled by the buffer pool
+        /// <summary>
+        /// The total number of bytes controlled by the buffer pool
+        /// </summary>
         Int32 totalBytesInBufferBlock;
 
-        // Byte array maintained by the Buffer Manager.
-        byte[] bufferBlock;         
-        Stack<int> freeIndexPool;     
+        /// <summary>
+        /// Byte array maintained by the Buffer Manager
+        /// </summary>
+        byte[] bufferBlock;
+
+        /// <summary>
+        /// Pool of free blocks
+        /// </summary>
+        Stack<int> freeIndexPool;
+
+        /// <summary>
+        /// Current index in the pool
+        /// </summary>
         Int32 currentIndex;
+
+        /// <summary>
+        /// Data block size for each SAEA
+        /// </summary>
         Int32 bufferBytesAllocatedForEachSaea;
 
+        /// <summary>
+        /// Creates new instance of SocketBufferManager
+        /// </summary>
+        /// <param name="totalBytes">Total size of byte array</param>
+        /// <param name="totalBufferBytesInEachSaeaObject">Data block size for each SAEA</param>
         public SocketBufferManager(Int32 totalBytes, Int32 totalBufferBytesInEachSaeaObject)
         {
             totalBytesInBufferBlock = totalBytes;
@@ -37,11 +59,14 @@
             this.bufferBlock = new byte[totalBytesInBufferBlock];
         }
 
-        // Divide that one large buffer block out to each SocketAsyncEventArg object.
-        // Assign a buffer space from the buffer block to the 
-        // specified SocketAsyncEventArgs object.
-        //
-        // returns true if the buffer was successfully set, else false
+        /// <summary>
+        /// Divide that one large buffer block out to each SocketAsyncEventArg object.
+        /// Assign a buffer space from the buffer block to the 
+        /// specified SocketAsyncEventArgs object.
+        /// </summary>
+        /// <param name="args">SAEA to assign buffer to</param>
+        /// <param name="count">Number of bytes in requested buffer</param>
+        /// <returns>True if the buffer was successfully set, else false</returns>
         internal bool SetBuffer(SocketAsyncEventArgs args, int count = 0)
         {
             if (args.Buffer != null)
@@ -80,12 +105,15 @@
             }
         }
 
-        // Removes the buffer from a SocketAsyncEventArg object.   This frees the
-        // buffer back to the buffer pool. Try NOT to use the FreeBuffer method,
-        // unless you need to destroy the SAEA object, or maybe in the case
-        // of some exception handling. Instead, on the server
-        // keep the same buffer space assigned to one SAEA object for the duration of
-        // this app's running.
+        /// <summary>
+        /// Removes the buffer from a SocketAsyncEventArg object.   This frees the
+        /// buffer back to the buffer pool. Try NOT to use the FreeBuffer method,
+        /// unless you need to destroy the SAEA object, or maybe in the case
+        /// of some exception handling. Instead, on the server
+        /// keep the same buffer space assigned to one SAEA object for the duration of
+        /// this app's running.
+        /// </summary>
+        /// <param name="args">SAEA to release buffer from</param>
         internal void FreeBuffer(SocketAsyncEventArgs args)
         {
             lock (this)

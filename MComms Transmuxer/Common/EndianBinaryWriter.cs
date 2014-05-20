@@ -27,9 +27,24 @@ namespace MComms_Transmuxer.Common
         /// </summary>
         char[] charBuffer = new char[1];
 
+        /// <summary>
+        /// Flag indicates whether we should leave the underlying stream open while disposing
+        /// </summary>
         bool leaveOpen = false;
+
+        /// <summary>
+        /// Currently used bit converter
+        /// </summary>
         EndianBitConverter bitConverter;
+
+        /// <summary>
+        /// Big endian bit converter
+        /// </summary>
         BigEndianBitConverter bigEndianBitConverter = new BigEndianBitConverter();
+
+        /// <summary>
+        /// Little endian bit converter
+        /// </summary>
         LittleEndianBitConverter littleEndianBitConverter = new LittleEndianBitConverter();
 
         #endregion
@@ -40,13 +55,19 @@ namespace MComms_Transmuxer.Common
         /// Constructs a new binary writer with the given bit converter, writing
         /// to the given stream, using UTF-8 encoding.
         /// </summary>
-        /// <param name="bitConverter">Converter to use when writing data</param>
         /// <param name="stream">Stream to write data to</param>
         public EndianBinaryWriter (Stream stream) : this (stream, Encoding.UTF8, false)
         {
         }
 
-        public EndianBinaryWriter(Stream stream, bool leaveOpen) : this(stream, Encoding.UTF8, leaveOpen)
+        /// <summary>
+        /// Constructs a new binary writer with the given stream with the option
+        /// to leave stream open on object dispose.
+        /// </summary>
+        /// <param name="stream">Stream to write data to</param>
+        /// <param name="leaveOpen">Leave stream open on object dispose</param>
+        public EndianBinaryWriter(Stream stream, bool leaveOpen)
+            : this(stream, Encoding.UTF8, leaveOpen)
         {
         }
 
@@ -61,6 +82,13 @@ namespace MComms_Transmuxer.Common
         {
         }
 
+        /// <summary>
+        /// Constructs a new binary writer with the given stream, using the given encoding
+        /// with the option to leave stream open on object dispose.
+        /// </summary>
+        /// <param name="stream">Stream to write data to</param>
+        /// <param name="encoding">Encoding to use when writing character data</param>
+        /// <param name="leaveOpen">Leave stream open on object dispose</param>
         public EndianBinaryWriter(Stream stream, Encoding encoding, bool leaveOpen)
         {
             if (stream == null)
@@ -86,6 +114,9 @@ namespace MComms_Transmuxer.Common
         #region Properties
 
         private static Endianness globalEndiannes = Endianness.BigEndian;
+        /// <summary>
+        /// Default endianness for all binary writers
+        /// </summary>
         public static Endianness GlobalEndiannes
         {
             get { return EndianBinaryWriter.globalEndiannes; }
@@ -93,6 +124,9 @@ namespace MComms_Transmuxer.Common
         }
 
         private Endianness endiannes = EndianBinaryWriter.globalEndiannes;
+        /// <summary>
+        /// Current endianness. Can be changed before any write
+        /// </summary>
         public Endianness Endiannes
         {
             get { return this.endiannes; }
@@ -193,12 +227,27 @@ namespace MComms_Transmuxer.Common
             WriteInternal(buffer, 4);
         }
 
+        /// <summary>
+        /// Writes a 32-bit signed integer to the stream, using the bit converter
+        /// for this writer. byteCount bytes are written.
+        /// </summary>
+        /// <param name="value">The value to write</param>
+        /// <param name="byteCount">Number of bytes to write</param>
         public void Write(int value, int byteCount)
         {
             bitConverter.CopyBytes(value, buffer, 0, byteCount);
             WriteInternal(buffer, byteCount);
         }
 
+        /// <summary>
+        /// Writes a 32-bit signed integer to the stream, using the bit converter
+        /// for this writer. byteCount bytes are written with specified endianness
+        /// </summary>
+        /// <param name="value">The value to write</param>
+        /// <param name="byteCount">Number of bytes to write</param>
+        /// <param name="endianness">
+        /// Endianness to use for this particular write only. It doesn't change the value of Endiannes property.
+        /// </param>
         public void Write(int value, int byteCount, Endianness endianness)
         {
             switch (endianness)
@@ -249,6 +298,12 @@ namespace MComms_Transmuxer.Common
             WriteInternal(buffer, 4);
         }
 
+        /// <summary>
+        /// Writes a 32-bit unsigned integer to the stream, using the bit converter
+        /// for this writer. byteCount bytes are written.
+        /// </summary>
+        /// <param name="value">The value to write</param>
+        /// <param name="byteCount">Number of bytes to write</param>
         public void Write(uint value, int byteCount)
         {
             bitConverter.CopyBytes(value, buffer, 0, byteCount);

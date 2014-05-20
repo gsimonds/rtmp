@@ -16,31 +16,133 @@
     using MComms_Transmuxer.SmoothStreaming;
     using MComms_Transmuxer.Transport;
 
+    /// <summary>
+    /// RTMP session handles one RTMP connection
+    /// </summary>
     public class RtmpSession : IDisposable
     {
+        #region Private constants and fields
+
+        /// <summary>
+        /// Unique session identifier
+        /// </summary>
         private long sessionId = 0;
+
+        /// <summary>
+        /// When session was created
+        /// </summary>
         private DateTime created = DateTime.Now;
+
+        /// <summary>
+        /// TCP transport
+        /// </summary>
         private SocketTransport transport = null;
+
+        /// <summary>
+        /// Session IP end point
+        /// </summary>
         private IPEndPoint sessionEndPoint = null;
+
+        /// <summary>
+        /// Whether session thread is running
+        /// </summary>
         private volatile bool isRunning = true;
-        private RtmpSessionState state = RtmpSessionState.Uninitialized;
-        private RtmpProtocolParser parser = new RtmpProtocolParser();
+
+        /// <summary>
+        /// Session thread
+        /// </summary>
         private Thread sessionThread = null;
+
+        /// <summary>
+        /// Session state
+        /// </summary>
+        private RtmpSessionState state = RtmpSessionState.Uninitialized;
+
+        /// <summary>
+        /// RTMP protocol parser
+        /// </summary>
+        private RtmpProtocolParser parser = new RtmpProtocolParser();
+
+        /// <summary>
+        /// Queue of the input packets received from the transport
+        /// </summary>
         private Queue<PacketBuffer> receivedPackets = new Queue<PacketBuffer>();
+
+        /// <summary>
+        /// Last packet was received. We're using this packet to append received data to it till it's processed.
+        /// </summary>
         private PacketBuffer lastReceivedPacket = null;
+
+        /// <summary>
+        /// Hadnshake S1 message. We need it to validate C2 message
+        /// </summary>
         private RtmpHandshake handshakeS1 = null;
+
+        /// <summary>
+        /// Message stream id counter
+        /// </summary>
         private int messageStreamCounter = 1;
-        private ulong receivedSize = 0;
-        private ulong sentSize = 0;
-        private ulong lastReportedReceivedSize = 0;
-        private DateTime lastReceivedSizeReported = DateTime.MinValue;
-        private ulong lastReportedSentSize = 0;
-        private uint receiveAckWindowSize = Global.RtmpDefaultAckWindowSize;
-        private uint sendAckWindowSize = Global.RtmpDefaultAckWindowSize;
+
+        /// <summary>
+        /// Message streams
+        /// </summary>
         private Dictionary<int, RtmpMessageStream> messageStreams = new Dictionary<int, RtmpMessageStream>();
+
+        /// <summary>
+        /// Total size of received data
+        /// </summary>
+        private ulong receivedSize = 0;
+
+        /// <summary>
+        /// Total size of sent data
+        /// </summary>
+        private ulong sentSize = 0;
+
+        /// <summary>
+        /// Size of received data reported last time
+        /// </summary>
+        private ulong lastReportedReceivedSize = 0;
+
+        /// <summary>
+        /// When last time receive size was reported
+        /// </summary>
+        private DateTime lastReceivedSizeReported = DateTime.MinValue;
+
+        /// <summary>
+        /// Size of sent data reported by peer last time
+        /// </summary>
+        private ulong lastReportedSentSize = 0;
+
+        /// <summary>
+        /// Receive ack size
+        /// </summary>
+        private uint receiveAckWindowSize = Global.RtmpDefaultAckWindowSize;
+
+        /// <summary>
+        /// Send ack size
+        /// </summary>
+        private uint sendAckWindowSize = Global.RtmpDefaultAckWindowSize;
+
+        /// <summary>
+        /// Last activity
+        /// </summary>
         private DateTime lastActivity = DateTime.Now;
+
+        /// <summary>
+        /// Route receive event state. Used to optimize received data route to skip processing by RTMP server
+        /// </summary>
         private int routeReceiveEventState = 0;
 
+        #endregion
+
+        #region Constructor
+
+        /// <summary>
+        /// Creates new instance of RtmpSession
+        /// </summary>
+        /// <param name="sessionId">Unique RTMP session id</param>
+        /// <param name="transport">TCP transport</param>
+        /// <param name="sessionEndPoint">IP end point</param>
         public RtmpSession(long sessionId, SocketTransport transport, IPEndPoint sessionEndPoint)
         {
             this.sessionId = sessionId;
@@ -51,8 +153,13 @@
             Global.Log.DebugFormat("End point {0}, id {1}: created session object", this.sessionEndPoint, this.sessionId);
         }
 
+        #endregion
+
         #region IDisposable
 
+        /// <summary>
+        /// Release resources
+        /// </summary>
         public void Dispose()
         {
             this.isRunning = false;
@@ -77,6 +184,16 @@
 
         #endregion
 
+        #region Public methods
+
+        /// <summary>
+        /// Called by RTMP server when data related to this session has been received.
+        /// As soon as session is established and media data started successfully, RTMP session
+        /// optimizes the route and starts receiving data directly from transport
+        /// without the help from RTMP server
+        /// </summary>
+        /// <param name="sender">RTMP server or TCP transport</param>
+        /// <param name="e">Received data</param>
         public void OnReceive(object sender, TransportArgs e)
         {
             lock (this.receivedPackets)
@@ -99,6 +216,13 @@
             }
         }
 
+        #endregion
+
+        #region Private methods
+
+        /// <summary>
+        /// Main session thread
+        /// </summary>
         private void SessionThread()
         {
             Global.Log.InfoFormat("End point {0}, id {1}: session thread started...", this.sessionEndPoint, this.sessionId);
@@ -207,6 +331,10 @@
             Global.Log.InfoFormat("End point {0}, id {1}: session thread finished...", this.sessionEndPoint, this.sessionId);
         }
 
+        /// <summary>
+        /// Processes RTMP message
+        /// </summary>
+        /// <param name="msg">RTMP message to process</param>
         private void ProcessMessage(RtmpMessage msg)
         {
             this.lastActivity = DateTime.Now;
@@ -1015,6 +1143,9 @@
             }
         }
 
+        /// <summary>
+        /// Releases all message streams
+        /// </summary>
         private void ReleaseMessageStreams()
         {
             foreach (RtmpMessageStream messageStream in this.messageStreams.Values)
@@ -1024,5 +1155,7 @@
 
             this.messageStreams.Clear();
         }
+
+        #endregion
     }
 }

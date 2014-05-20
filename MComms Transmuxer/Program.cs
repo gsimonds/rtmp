@@ -11,6 +11,9 @@
     using MComms_Transmuxer.Common;
     using MComms_Transmuxer.RTMP;
 
+    /// <summary>
+    /// Main program
+    /// </summary>
     static class Program
     {
         /// <summary>

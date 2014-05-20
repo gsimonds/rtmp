@@ -8,8 +8,17 @@
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// RTMP message "AMF0 encoded command". Used to store & generate various command messages.
+    /// </summary>
     public class RtmpMessageCommand : RtmpMessage
     {
+        /// <summary>
+        /// Creates new instance of RtmpMessageCommand
+        /// </summary>
+        /// <param name="commandName">Command name</param>
+        /// <param name="transactionId">Transaction Id</param>
+        /// <param name="parameters">Other parameters</param>
         public RtmpMessageCommand(string commandName, int transactionId, List<object> parameters)
         {
             this.OrigMessageType = RtmpMessageType.CommandAmf0;
@@ -64,12 +73,25 @@
             }
         }
 
+        /// <summary>
+        /// Gets or sets command name
+        /// </summary>
         public string CommandName { get; set; }
 
+        /// <summary>
+        /// Gets or sets transaction id
+        /// </summary>
         public int TransactionId { get; set; }
 
+        /// <summary>
+        /// Gets or sets command parameters
+        /// </summary>
         public List<object> Parameters { get; set; }
 
+        /// <summary>
+        /// Converts current object to RTMP chunk and returns packet buffer containing it
+        /// </summary>
+        /// <returns>Packet buffer containing the converted RTMP chunk</returns>
         public override PacketBuffer ToRtmpChunk()
         {
             // TODO: add chunk size check
@@ -94,6 +116,12 @@
             return packet;
         }
 
+        /// <summary>
+        /// Creates message body
+        /// </summary>
+        /// <param name="hdrSize">Header size</param>
+        /// <param name="totalSize">Total message size</param>
+        /// <returns>Packet buffer containing the message body and reserved space for a header</returns>
         private PacketBuffer createBody(int hdrSize, ref int totalSize)
         {
             PacketBuffer packet = Global.Allocator.LockBuffer();

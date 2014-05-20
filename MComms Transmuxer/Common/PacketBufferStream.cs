@@ -9,38 +9,105 @@
     using System.Text;
     using System.Threading.Tasks;
 
+    /// <summary>
+    /// It is an abstraction stream above underlying packet buffer(s)
+    /// containing the real data
+    /// </summary>
     public class PacketBufferStream : Stream
     {
+        #region Private types, constants and fields
+
+        /// <summary>
+        /// Internal class to store underlying buffer parameters
+        /// </summary>
         private class BufferEntry
         {
+            /// <summary>
+            /// Current buffer offset
+            /// </summary>
             public int Offset { get; set; }
+
+            /// <summary>
+            /// Buffer size used in the stream
+            /// </summary>
             public int Size { get; set; }
+
+            /// <summary>
+            /// Underlying buffer
+            /// </summary>
             public PacketBuffer Buffer { get; set; }
         }
 
+        /// <summary>
+        /// Current stream position
+        /// </summary>
         private long position = 0;
+
+        /// <summary>
+        /// Position key in position2BufferId list pointing to a buffer
+        /// holding the data for current position
+        /// </summary>
         private long positionKey = 0;
+
+        /// <summary>
+        /// Total stream length
+        /// </summary>
         private long totalLength = 0;
+
+        /// <summary>
+        /// Map from buffer's starting position in the stream to buffer id
+        /// </summary>
         private SortedList<long, long> position2BufferId = new SortedList<long, long>();
+
+        /// <summary>
+        /// Map from buffer id to buffer entry
+        /// </summary>
         private Hashtable bufferId2BufferEntry = new Hashtable();
+
+        /// <summary>
+        /// Field used for optimization when we have single buffer per stream
+        /// </summary>
         private BufferEntry singleEntry = null;
 
+        #endregion
+
+        #region Constructors
+
+        /// <summary>
+        /// Creates instance of an empty stream
+        /// </summary>
         public PacketBufferStream()
         {
         }
 
+        /// <summary>
+        /// Creates the stream using the specified packet buffer
+        /// </summary>
+        /// <param name="packet">Packet buffer containing the real data</param>
         public PacketBufferStream(PacketBuffer packet)
         {
             this.Append(packet, 0, packet.ActualBufferSize);
         }
 
+        /// <summary>
+        /// Creates the stream using the specified packet buffer, offset and count bytes
+        /// </summary>
+        /// <param name="packet">Packet buffer containing the real data</param>
+        /// <param name="offset">Offset of the data in the buffer</param>
+        /// <param name="count">Number of bytes to use</param>
         public PacketBufferStream(PacketBuffer packet, int offset, int count)
         {
             this.Append(packet, offset, count);
         }
 
+        #endregion
+
         #region Stream implementation
 
+        /// <summary>
+        /// Releases resources
+        /// </summary>
+        /// <param name="disposing"></param>
         protected override void Dispose(bool disposing)
         {
             if (disposing)
@@ -55,26 +122,41 @@
             base.Dispose(disposing);
         }
 
+        /// <summary>
+        /// Can we read from the stream (always true for current class)
+        /// </summary>
         public override bool CanRead
         {
             get { return true; }
         }
 
+        /// <summary>
+        /// Can we write to the stream (always true for current class)
+        /// </summary>
         public override bool CanWrite
         {
             get { return true; }
         }
 
+        /// <summary>
+        /// Can we seek the stream (always true for current class)
+        /// </summary>
         public override bool CanSeek
         {
             get { return true; }
         }
 
+        /// <summary>
+        /// Gets stream length
+        /// </summary>
         public override long Length
         {
             get { return this.totalLength; }
         }
 
+        /// <summary>
+        /// Gets or set stream position
+        /// </summary>
         public override long Position
         {
             get
@@ -112,11 +194,20 @@
             }
         }
 
+        /// <summary>
+        /// Flush the stream (not applicable for current class)
+        /// </summary>
         public override void Flush()
         {
             // nothing to do
         }
 
+        /// <summary>
+        /// Seek to a specified position
+        /// </summary>
+        /// <param name="offset">Target offset</param>
+        /// <param name="origin">Target origin</param>
+        /// <returns>Position after applying the specified offset</returns>
         public override long Seek(long offset, SeekOrigin origin)
         {
             switch (origin)
@@ -135,11 +226,19 @@
             return this.position;
         }
 
+        /// <summary>
+        /// Current class doesn't support setting of length
+        /// </summary>
+        /// <param name="value"></param>
         public override void SetLength(long value)
         {
-            throw new NotImplementedException();
+            throw new NotSupportedException();
         }
 
+        /// <summary>
+        /// Read one byte from the stream
+        /// </summary>
+        /// <returns>Byte read at current stream position</returns>
         public override int ReadByte()
         {
             int value = 0;
@@ -190,6 +289,13 @@
             return value;
         }
 
+        /// <summary>
+        /// Read specified number of bytes to a byte buffer
+        /// </summary>
+        /// <param name="buffer">Byte buffer to hold read data</param>
+        /// <param name="offset">Offset of the read buffer</param>
+        /// <param name="count">Number of bytes to read</param>
+        /// <returns>Number of bytes actually read</returns>
         public override int Read(byte[] buffer, int offset, int count)
         {
             int actuallyRead = 0;
@@ -237,6 +343,12 @@
             return actuallyRead;
         }
 
+        /// <summary>
+        /// Write specified number of bytes from the byte buffer to the stream
+        /// </summary>
+        /// <param name="buffer">Byte buffer to write data from</param>
+        /// <param name="offset">Byte buffer offset</param>
+        /// <param name="count">Number of bytes to write</param>
         public override void Write(byte[] buffer, int offset, int count)
         {
             if (this.singleEntry != null)
@@ -302,8 +414,15 @@
 
         #region PacketBufferStream specific properties and methods
 
-        public bool OneMessageStream { get; set; }
+        /// <summary>
+        /// Whether the stream contains only one message.
+        /// Flag used by RTMP parser constructing one RTMP message from several chunks
+        /// </summary>
+        public bool OneMessage { get; set; }
 
+        /// <summary>
+        /// Gets the first underlying packet buffer
+        /// </summary>
         public PacketBuffer FirstPacketBuffer
         {
             get
@@ -324,6 +443,13 @@
             }
         }
 
+        /// <summary>
+        /// Append specified packet buffer to current stream. This function doesn't do any actual memory copy.
+        /// Instead it just adds new buffer to the underlying buffer list.
+        /// </summary>
+        /// <param name="buffer">Packet buffer to append</param>
+        /// <param name="offset">Offset in the packet buffer</param>
+        /// <param name="count">Number of bytes to use from the packet buffer</param>
         public void Append(PacketBuffer buffer, int offset, int count)
         {
             if (this.position != this.totalLength)

@@ -13,20 +13,70 @@
     using MComms_Transmuxer.SmoothStreaming;
     using MComms_Transmuxer.Transport;
 
+    /// <summary>
+    /// RTMP server. Waiting for incoming connections, manages RTMP sessions.
+    /// </summary>
     public class RtmpServer
     {
+        #region Private constants and fields
+
+        /// <summary>
+        /// TCP transport
+        /// </summary>
         private SocketTransport transport = null;
+
+        /// <summary>
+        /// Whether we've started
+        /// </summary>
         private volatile bool isRunning = false;
+
+        /// <summary>
+        /// Control thread
+        /// </summary>
         private Thread controlThread = null;
+
+        /// <summary>
+        /// RTMP sessions
+        /// </summary>
         private Hashtable sessions = new Hashtable();
+
+        /// <summary>
+        /// Session counter
+        /// </summary>
         private long sessionCounter = 0;
 
-        private Statistics stat = new Statistics();
-        private DateTime lastStatCollected = DateTime.MinValue;
+        /// <summary>
+        /// Last time we checked publishing points
+        /// </summary>
         private DateTime lastPublishingPointsChecked = DateTime.MinValue;
+
+        /// <summary>
+        /// Perf counters
+        /// </summary>
+        private Statistics stat = new Statistics();
+
+        /// <summary>
+        /// Last time we've collected the stat
+        /// </summary>
+        private DateTime lastStatCollected = DateTime.MinValue;
+
+        /// <summary>
+        /// Current number of connections
+        /// </summary>
         private volatile int statNumberOfConnections = 0;
+
+        /// <summary>
+        /// Current total bandwidth
+        /// </summary>
         private volatile int statTotalBandwidth = 0;
 
+        #endregion
+
+        #region Constructor
+
+        /// <summary>
+        /// Creates new instance of RtmpServer
+        /// </summary>
         public RtmpServer()
         {
             // initialize default endianness
@@ -53,6 +103,13 @@
             this.controlThread = new Thread(this.ControlThreadProc);
         }
 
+        #endregion
+
+        #region Public methods
+
+        /// <summary>
+        /// Starts RTMP server
+        /// </summary>
         public void Start()
         {
             this.isRunning = true;
@@ -61,6 +118,9 @@
             this.transport.Start(new IPEndPoint(IPAddress.Any, Properties.Settings.Default.RtmpPort), System.Net.Sockets.ProtocolType.Tcp);
         }
 
+        /// <summary>
+        /// Stops RTMP server
+        /// </summary>
         public void Stop()
         {
             this.transport.Stop();
@@ -72,6 +132,13 @@
             SmoothStreamingPublisher.DeleteAll();
         }
 
+        #endregion
+
+        #region Private methods and event handlers
+
+        /// <summary>
+        /// Main control thread
+        /// </summary>
         private void ControlThreadProc()
         {
             Global.Log.Debug("RtmpServer main thread started");
@@ -95,7 +162,12 @@
             }
         }
 
-        void Transport_Connected(object sender, TransportArgs e)
+        /// <summary>
+        /// Called when new connection established
+        /// </summary>
+        /// <param name="sender">Transport object</param>
+        /// <param name="e">Connection parameters</param>
+        private void Transport_Connected(object sender, TransportArgs e)
         {
             lock (this)
             {
@@ -112,7 +184,12 @@
             }
         }
 
-        void Transport_Disconnected(object sender, TransportArgs e)
+        /// <summary>
+        /// Called when connection finished
+        /// </summary>
+        /// <param name="sender">Transport object</param>
+        /// <param name="e">Connection parameters</param>
+        private void Transport_Disconnected(object sender, TransportArgs e)
         {
             lock (this)
             {
@@ -129,7 +206,12 @@
             }
         }
 
-        void Transport_Received(object sender, TransportArgs e)
+        /// <summary>
+        /// Called when we received new data
+        /// </summary>
+        /// <param name="sender">Transport object</param>
+        /// <param name="e">Connection parameters including received data</param>
+        private void Transport_Received(object sender, TransportArgs e)
         {
             lock (this)
             {
@@ -145,7 +227,12 @@
             }
         }
 
-        void Transport_Sent(object sender, TransportArgs e)
+        /// <summary>
+        /// Called when data has been sent
+        /// </summary>
+        /// <param name="sender">Transport object</param>
+        /// <param name="e">Connection parameters including sent data</param>
+        private void Transport_Sent(object sender, TransportArgs e)
         {
             lock (this)
             {
@@ -157,5 +244,7 @@
                 }
             }
         }
+
+        #endregion
     }
 }

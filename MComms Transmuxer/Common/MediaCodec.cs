@@ -6,11 +6,19 @@
     using System.Text;
     using System.Threading.Tasks;
 
+    /// <summary>
+    /// Media codecs including video, audio and text
+    /// </summary>
     public enum MediaCodec
     {
-        // video codecs
+        /// <summary>
+        /// H.264
+        /// </summary>
         H264,
-        // audio codecs
+
+        /// <summary>
+        /// AAC
+        /// </summary>
         AAC,
     }
 }

@@ -6,12 +6,41 @@
     using System.Text;
     using System.Threading.Tasks;
 
+    /// <summary>
+    /// Class used to pre-allocate big amount of memory buffers
+    /// to re-use them during the whole program execution time
+    /// to decrease allocation/de-allocation time and prevent memory fragmentation
+    /// </summary>
     public class PacketBufferAllocator
     {
+        #region Private constants and fields
+
+        /// <summary>
+        /// Size of one buffer
+        /// </summary>
         private int bufferSize = 0;
+
+        /// <summary>
+        /// Number of pre-allocated buffers
+        /// </summary>
         private int bufferCount = 0;
+
+        /// <summary>
+        /// Current number of free buffers.
+        /// This is a volatile field, can be used without locks
+        /// but its value is informational, i.e. it can be changed
+        /// while you're processing it
+        /// </summary>
         private volatile int freeBufferCount = 0;
+
+        /// <summary>
+        /// Free buffers
+        /// </summary>
         private List<PacketBuffer> freeBuffers = new List<PacketBuffer>();
+
+        /// <summary>
+        /// Locked buffers
+        /// </summary>
         private List<PacketBuffer> lockedBuffers = new List<PacketBuffer>();
 
 #if ALLOCATOR_USAGE_STAT
@@ -23,6 +52,16 @@
         private long usedBuffersCount = 0;
 #endif
 
+        #endregion
+
+        #region Constructor
+
+        /// <summary>
+        /// Creates the instance of PacketBufferAllocator with the specified buffer size
+        /// and specified buffer count
+        /// </summary>
+        /// <param name="bufferSize">Buffer size to create</param>
+        /// <param name="bufferCount">Number of buffers to create</param>
         public PacketBufferAllocator(int bufferSize, int bufferCount)
         {
             this.bufferSize = bufferSize;
@@ -36,6 +75,13 @@
             }
         }
 
+        #endregion
+
+        #region Public properties and methods
+
+        /// <summary>
+        /// Size of one buffer
+        /// </summary>
         public int BufferSize
         {
             get
@@ -44,6 +90,9 @@
             }
         }
 
+        /// <summary>
+        /// Number of pre-allocated buffers
+        /// </summary>
         public int BufferCount
         {
             get
@@ -52,6 +101,11 @@
             }
         }
 
+        /// <summary>
+        /// Current number of free buffers.
+        /// This property is thread safe but its value is informational,
+        /// i.e. it can be changed while you're processing it
+        /// </summary>
         public int FreeBufferCount
         {
             get
@@ -60,6 +114,11 @@
             }
         }
 
+        /// <summary>
+        /// Re-allocates the buffers with the specified parameters
+        /// </summary>
+        /// <param name="bufferSize">New single buffer size</param>
+        /// <param name="bufferCount">New number of buffers</param>
         public void Reallocate(int bufferSize, int bufferCount)
         {
             lock (this)
@@ -80,6 +139,10 @@
             }
         }
 
+        /// <summary>
+        /// Finds free buffer, locks it and returns to a caller
+        /// </summary>
+        /// <returns>Locked buffer</returns>
         public PacketBuffer LockBuffer()
         {
             lock (this)
@@ -125,11 +188,15 @@
             }
         }
 
+        #endregion
+
+        #region Internal methods
+
         /// <summary>
         /// This function must not be called directly.
         /// It's intended for internal use by friend PacketBuffer class.
         /// </summary>
-        /// <param name="buffer"></param>
+        /// <param name="buffer">Packet to move from locked buffers to free buffers</param>
         public void ReleaseBuffer(PacketBuffer buffer)
         {
             lock (this)
@@ -163,5 +230,7 @@
                 }
             }
         }
+
+        #endregion
     }
 }

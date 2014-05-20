@@ -8,19 +8,39 @@
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// Lowest level RTMP protocol decoder/encoder.
+    /// Decoder receives PacketBuffer and outputs parsed RtmpMessage objects.
+    /// Encoder receives RtmpMessage objects and generates PacketBuffer with ready to send data.
+    /// </summary>
     public class RtmpProtocolParser
     {
-        private int chunkSize = Global.RtmpDefaultChunkSize;
-        private PacketBufferStream dataStream = new PacketBufferStream();
-        private RtmpHandshake handshake = new RtmpHandshake();
-        private Dictionary<uint, RtmpChunkStream> chunkStreams = new Dictionary<uint, RtmpChunkStream>();
-        private List<int> registeredMessageStreams = new List<int>();
-        private bool aligning = false;
+        #region Private constants and fields
 
-#if DEBUG_RTMP_CORRUPTION
-        private List<PacketBuffer> history = new List<PacketBuffer>();
-        private RtmpMessage lastMessage = null;
-#endif
+        /// <summary>
+        /// Current chunk size. Takes RTMP standard chunk size as default, can be adjusted during a session.
+        /// </summary>
+        private int chunkSize = Global.RtmpDefaultChunkSize;
+
+        /// <summary>
+        /// Abstract stream build on top of underlying packet buffers
+        /// </summary>
+        private PacketBufferStream dataStream = new PacketBufferStream();
+
+        /// <summary>
+        /// Chunks streams
+        /// </summary>
+        private Dictionary<uint, RtmpChunkStream> chunkStreams = new Dictionary<uint, RtmpChunkStream>();
+
+        /// <summary>
+        /// List of registered message streams, used to detect input stream synchronization
+        /// </summary>
+        private List<int> registeredMessageStreams = new List<int>();
+
+        /// <summary>
+        /// Flag indicating that we're in the process of (re)aligning after we've lost synchronization
+        /// </summary>
+        private bool aligning = false;
 
         /// <summary>
         /// Output packet queue. We're using List instead of Queue to allow insertion
@@ -28,6 +48,19 @@
         /// </summary>
         private List<PacketBuffer> outputQueue = new List<PacketBuffer>();
 
+#if DEBUG_RTMP_CORRUPTION
+        // used to resolve data synchronization issues
+        private List<PacketBuffer> history = new List<PacketBuffer>();
+        private RtmpMessage lastMessage = null;
+#endif
+
+        #endregion
+
+        #region Constructor
+
+        /// <summary>
+        /// Creates new instance of RtmpProtocolParser
+        /// </summary>
         public RtmpProtocolParser()
         {
             this.State = RtmpSessionState.Uninitialized;
@@ -35,6 +68,10 @@
             // allocate data for chunk control stream
             this.chunkStreams.Add(2, new RtmpChunkStream(2, this.ChunkSize));
         }
+
+        #endregion
+
+        #region Public properties and methods
 
         /// <summary>
         /// We need session state in the parser to know what kind
@@ -44,6 +81,9 @@
         /// </summary>
         public RtmpSessionState State { get; set; }
 
+        /// <summary>
+        /// Current chunk size. Takes RTMP standard chunk size as default, can be adjusted during a session.
+        /// </summary>
         public int ChunkSize
         {
             get { return this.chunkSize; }
@@ -57,6 +97,18 @@
             }
         }
 
+        /// <summary>
+        /// Decodes RTMP message from the provided packet buffer.
+        /// If data is not enough to parse the message then null will be returned.
+        /// </summary>
+        /// <param name="dataPacket">
+        /// Packet buffer with new data. It can be null which means to use already
+        /// cached data from dataStream to decode next message.
+        /// </param>
+        /// <returns>
+        /// New RTMP message if parsing was successful, null otherwise.
+        /// If null returned then it means we need more input data.
+        /// </returns>
         public RtmpMessage Decode(PacketBuffer dataPacket)
         {
             RtmpMessage msg = null;
@@ -180,11 +232,21 @@
             return msg;
         }
 
+        /// <summary>
+        /// Encodes provided message into RTMP chunk(s) and stores it in internal queue.
+        /// The consequent one or more calls to GetSendPacket() have to be used to
+        /// return packet buffers with encoded data
+        /// </summary>
+        /// <param name="msg">RTMP message to encode</param>
         public void Encode(RtmpMessage msg)
         {
             this.outputQueue.Add(msg.ToRtmpChunk());
         }
 
+        /// <summary>
+        /// Gets next packet buffer from the output queue
+        /// </summary>
+        /// <returns>Next packet buffer from the output queue</returns>
         public PacketBuffer GetSendPacket()
         {
             if (this.outputQueue.Count > 0)
@@ -199,6 +261,11 @@
             }
         }
 
+        /// <summary>
+        /// Registers message stream id. We're using message stream ids to detect
+        /// lost data synchronization in the input stream
+        /// </summary>
+        /// <param name="messageStreamId">Message stream id to register</param>
         public void RegisterMessageStream(int messageStreamId)
         {
             if (!this.registeredMessageStreams.Contains(messageStreamId))
@@ -207,6 +274,10 @@
             }
         }
 
+        /// <summary>
+        /// Unregisters message stream id
+        /// </summary>
+        /// <param name="messageStreamId">Message stream id to unregister</param>
         public void UnregisterMessageStream(int messageStreamId)
         {
             if (this.registeredMessageStreams.Contains(messageStreamId))
@@ -215,11 +286,20 @@
             }
         }
 
+        /// <summary>
+        /// Whether message stream id registered or not
+        /// </summary>
+        /// <param name="messageStreamId">Message stream id to check</param>
+        /// <returns>True if message stream id registered, false otherwise.</returns>
         public bool IsMessageStreamRegistered(int messageStreamId)
         {
             return this.registeredMessageStreams.Contains(messageStreamId);
         }
 
+        /// <summary>
+        /// Aborts specified chunk stream
+        /// </summary>
+        /// <param name="chunkStreamId">Chunk stream to abort</param>
         public void Abort(uint chunkStreamId)
         {
             if (this.chunkStreams.ContainsKey(chunkStreamId))
@@ -227,5 +307,7 @@
                 this.chunkStreams[chunkStreamId].Abort();
             }
         }
+
+        #endregion
     }
 }

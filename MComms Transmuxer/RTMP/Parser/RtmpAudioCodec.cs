@@ -6,6 +6,9 @@
     using System.Text;
     using System.Threading.Tasks;
 
+    /// <summary>
+    /// Audio codecs supported by RTMP
+    /// </summary>
     public enum RtmpAudioCodec
     {
         PCM = 0,

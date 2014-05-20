@@ -8,8 +8,14 @@
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// RTMP message "SetPeerBandwidth"
+    /// </summary>
     public class RtmpMessageSetPeerBandwidth : RtmpMessage
     {
+        /// <summary>
+        /// Bandwidth limit type
+        /// </summary>
         public enum LimitTypes : byte
         {
             Hard = 0x00,
@@ -17,6 +23,11 @@
             Dynamic = 0x02,
         }
 
+        /// <summary>
+        /// Creates new instance of RtmpMessageSetPeerBandwidth
+        /// </summary>
+        /// <param name="ackSize">Acknowledge size</param>
+        /// <param name="limitType">Limit type</param>
         public RtmpMessageSetPeerBandwidth(uint ackSize, LimitTypes limitType)
         {
             this.AckSize = ackSize;
@@ -25,10 +36,20 @@
             this.OrigMessageType = RtmpMessageType.SetPeerBandwidth;
         }
 
+        /// <summary>
+        /// Gets or sets acknowledge size
+        /// </summary>
         public uint AckSize { get; set; }
 
+        /// <summary>
+        /// Gets or sets limit type
+        /// </summary>
         public LimitTypes LimitType { get; set; }
 
+        /// <summary>
+        /// Converts current object to RTMP chunk and returns packet buffer containing it
+        /// </summary>
+        /// <returns>Packet buffer containing the converted RTMP chunk</returns>
         public override PacketBuffer ToRtmpChunk()
         {
             // we need only one chunk for this message

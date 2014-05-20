@@ -7,8 +7,16 @@
 
     using MComms_Transmuxer.Common;
 
+    /// <summary>
+    /// FLV file header
+    /// </summary>
     public class FlvFileHeader
     {
+        /// <summary>
+        /// Creates new instance of FLV file header with specified stream flags
+        /// </summary>
+        /// <param name="haveAudio">Whether file contains audio</param>
+        /// <param name="haveVideo">Whether file contains video</param>
         public FlvFileHeader(bool haveAudio, bool haveVideo)
         {
             this.FileVersion = 1;
@@ -16,12 +24,24 @@
             this.HaveVideo = haveVideo;
         }
 
+        /// <summary>
+        /// Gets or sets FLV file version. Has to be 1.
+        /// </summary>
         public byte FileVersion { get; set; }
 
+        /// <summary>
+        /// Gets or sets whether the file contains audio
+        /// </summary>
         public bool HaveAudio { get; set; }
 
+        /// <summary>
+        /// Gets or sets whether the file contains video
+        /// </summary>
         public bool HaveVideo { get; set; }
 
+        /// <summary>
+        /// Gets header size
+        /// </summary>
         public int HeaderSize
         {
             get
@@ -30,6 +50,10 @@
             }
         }
 
+        /// <summary>
+        /// Converts current object to a byte array and returns packet buffer containing it
+        /// </summary>
+        /// <returns>Packet buffer containing the converted byte array</returns>
         public PacketBuffer ToPacketBuffer()
         {
             PacketBuffer packet = Global.Allocator.LockBuffer();
