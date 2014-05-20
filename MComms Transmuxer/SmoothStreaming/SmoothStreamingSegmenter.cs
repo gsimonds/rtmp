@@ -198,7 +198,15 @@
                 if (muxId < 0)
                 {
                     // stream re-registration necessary (eg added another bitrate)
-                    this.RegisterStream(this.publisher.GetMediaType(publishStreamId));
+                    MediaType mt = this.publisher.GetMediaType(publishStreamId);
+                    if (mt == null)
+                    {
+                        throw new CriticalStreamException(string.Format("Media type {0} already unregistered", publishStreamId));
+                    }
+                    else
+                    {
+                        this.RegisterStream(mt);
+                    }
                 }
             }
             while (muxId < 0);
@@ -240,7 +248,7 @@
 
             if (pushResult < 0)
             {
-                throw new CriticalStreamException(string.Format("MCSSF_PushMedia failed {0}", pushResult));
+                throw new CriticalStreamException(string.Format("MCSSF_PushMedia failed {0} (0x{1:x}), timestamp {2}", pushResult, outputDataSize, adjustedTimestamp));
             }
 
             if (outputDataSize > 0)

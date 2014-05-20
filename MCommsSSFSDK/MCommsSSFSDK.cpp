@@ -243,7 +243,7 @@ int MCOMMS_API MCSSF_PushMedia(int nMuxId, int nStreamId, LONGLONG nStartTime, L
     map<int, StreamContext*>::iterator i_s = pMux->pStreams->find(nStreamId);
     if (i_s == pMux->pStreams->end())
     {
-        return -1;
+        return -2;
     }
 
     StreamContext* pStream = i_s->second;
@@ -262,14 +262,16 @@ int MCOMMS_API MCSSF_PushMedia(int nMuxId, int nStreamId, LONGLONG nStartTime, L
         hr = SSFMuxAdjustDuration(pMux->hSSFMux, pStream->dwStreamIndex, nStartTime);
         if (FAILED(hr))
         {
-            return -1;
+            *pOutputDataSize = hr;
+            return -3;
         }
 
         SSF_BUFFER outputBuffer;
         hr = SSFMuxProcessOutput(pMux->hSSFMux, pStream->dwStreamIndex, &outputBuffer);
         if (FAILED(hr))
         {
-            return -1;
+            *pOutputDataSize = hr;
+            return -4;
         }
 
         ++pStream->dwChunkIndex;
@@ -306,7 +308,8 @@ int MCOMMS_API MCSSF_PushMedia(int nMuxId, int nStreamId, LONGLONG nStartTime, L
     hr = SSFMuxProcessInput(pMux->hSSFMux, pStream->dwStreamIndex, &inputSample);
     if (FAILED(hr))
     {
-        return -1;
+        *pOutputDataSize = hr;
+        return -5;
     }
 
     return nResult;

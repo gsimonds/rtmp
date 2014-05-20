@@ -57,25 +57,27 @@
         /// </summary>
         public void Dispose()
         {
-            foreach (Stream webRequestStream in this.webRequestStreams.Values)
+            lock (this)
             {
-                try
+                foreach (Stream webRequestStream in this.webRequestStreams.Values)
                 {
-                    webRequestStream.Close();
-                    webRequestStream.Dispose();
+                    try
+                    {
+                        webRequestStream.Dispose();
+                    }
+                    catch
+                    {
+                    }
                 }
-                catch
+
+                this.webRequestStreams.Clear();
+                this.webRequests.Clear();
+
+                if (this.muxId >= 0)
                 {
+                    SmoothStreamingSegmenter.MCSSF_Uninitialize(this.muxId);
+                    this.muxId = -1;
                 }
-            }
-
-            this.webRequestStreams.Clear();
-            this.webRequests.Clear();
-
-            if (this.muxId >= 0)
-            {
-                SmoothStreamingSegmenter.MCSSF_Uninitialize(this.muxId);
-                this.muxId = -1;
             }
         }
 
@@ -325,13 +327,16 @@
                 }
                 catch (Exception)
                 {
+                    //Global.Log.DebugFormat("webRequestStream.Write() failed: {0}", ex.ToString());
                     try
                     {
-                        webRequestStream.Close();
+                        webRequestStream.Dispose();
                     }
                     catch
                     {
                     }
+
+                    webRequestStream = null;
 
                     lock (this)
                     {
@@ -340,6 +345,8 @@
                     }
                 }
             }
+
+            //GC.Collect();
         }
 
         public void CompareHeader()
@@ -369,6 +376,9 @@
             webRequest.Method = "POST";
             webRequest.SendChunked = true;
             webRequest.KeepAlive = true;
+            webRequest.AllowWriteStreamBuffering = false;
+            webRequest.ReadWriteTimeout = 3600000;
+            webRequest.Timeout = 3600000;
             this.webRequests.Add(streamId, webRequest);
             this.webRequestStreams.Add(streamId, webRequest.GetRequestStream());
 
