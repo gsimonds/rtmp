@@ -4,7 +4,11 @@
 #include <dvdmedia.h>
 
 #include "../3rdParty/SSFSDK/ssfsdkapi.h"
+#ifdef _WIN64
 #pragma comment(lib, "../3rdParty/SSFSDK/ssfsdk_x64.lib")
+#else
+#pragma comment(lib, "../3rdParty/SSFSDK/ssfsdk.lib")
+#endif
 #pragma comment(lib, "xmllite.lib")
 
 #include <map>

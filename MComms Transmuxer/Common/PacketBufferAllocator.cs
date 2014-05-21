@@ -130,6 +130,9 @@
                 // delete all free buffers
                 this.freeBuffers.Clear();
 
+                this.bufferCount = bufferCount;
+                this.freeBufferCount = bufferCount;
+
                 // allocate buffers with new size
                 for (int i = 0; i < this.bufferCount; ++i)
                 {

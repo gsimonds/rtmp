@@ -277,6 +277,8 @@
         {
             if (this.incompleteMessageStream != null)
             {
+                this.incompletePacketBuffer.Release();
+                this.incompletePacketBuffer = null;
                 this.incompleteMessageStream.Dispose();
                 this.incompleteMessageStream = null;
                 this.incompleteMessageChunkHeader = null;

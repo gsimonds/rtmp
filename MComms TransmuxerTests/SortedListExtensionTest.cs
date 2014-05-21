@@ -1,21 +1,18 @@
-﻿using MComms_Transmuxer.RTMP;
+﻿using MComms_Transmuxer.Common;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
-using MComms_Transmuxer.Transport;
-using System.Net;
-using MComms_Transmuxer;
-using MComms_Transmuxer.Common;
+using System.Collections.Generic;
 
 namespace MComms_TransmuxerTests
 {
     
     
     /// <summary>
-    ///This is a test class for RtmpSessionTest and is intended
-    ///to contain all RtmpSessionTest Unit Tests
+    ///This is a test class for SortedListExtensionTest and is intended
+    ///to contain all SortedListExtensionTest Unit Tests
     ///</summary>
     [TestClass()]
-    public class RtmpSessionTest
+    public class SortedListExtensionTest
     {
 
 
@@ -69,35 +66,33 @@ namespace MComms_TransmuxerTests
 
 
         /// <summary>
-        /// A test for Dispose, it includes also tests for OnReceive and ReleaseMessageStreams
+        ///A test for FindFirstIndexGreaterThan
         ///</summary>
         [TestMethod()]
-        public void DisposeTest()
+        public void FindFirstIndexGreaterThanTest()
         {
-            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, 10);
-            long sessionId = 1;
-            SocketTransport transport = new SocketTransport();
-            transport.Start();
-            IPEndPoint sessionEndPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9999);
-            RtmpSession_Accessor target = new RtmpSession_Accessor(sessionId, transport, sessionEndPoint);
+            SortedList<int, int> list = new SortedList<int, int>();
+            list.Add(0, 0);
+            list.Add(100, 100);
+            list.Add(200, 200);
+            Assert.AreEqual(0, list.FindFirstIndexGreaterThan(-1));
+            Assert.AreEqual(1, list.FindFirstIndexGreaterThan(0));
+            Assert.AreEqual(3, list.FindFirstIndexGreaterThan(200));
+        }
 
-            target.messageStreams.Add(1, new RtmpMessageStream(1));
-
-            byte[] buf = new byte[Global.TransportBufferSize];
-            for (int i = 0; i < 10; ++i)
-            {
-                target.OnReceive(null, new TransportArgs(null, buf, 0, buf.Length));
-            }
-
-            Assert.IsTrue(target.receivedPackets.Count > 0);
-
-            target.Dispose();
-            Assert.IsNull(target.sessionThread);
-            Assert.AreEqual(0, target.messageStreams.Count);
-            Assert.AreEqual(0, target.receivedPackets.Count);
-            Assert.IsNull(target.lastReceivedPacket);
-
-            transport.Stop();
+        /// <summary>
+        ///A test for FindFirstIndexLessThanOrEqualTo
+        ///</summary>
+        [TestMethod()]
+        public void FindFirstIndexLessThanOrEqualToTest()
+        {
+            SortedList<int, int> list = new SortedList<int, int>();
+            list.Add(0, 0);
+            list.Add(100, 100);
+            list.Add(200, 200);
+            Assert.AreEqual(-1, list.FindFirstIndexLessThanOrEqualTo(-1));
+            Assert.AreEqual(0, list.FindFirstIndexLessThanOrEqualTo(1));
+            Assert.AreEqual(2, list.FindFirstIndexLessThanOrEqualTo(500));
         }
     }
 }

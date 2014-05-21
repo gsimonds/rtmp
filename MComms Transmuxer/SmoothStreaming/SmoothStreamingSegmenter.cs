@@ -61,12 +61,12 @@
         /// Creates new instance of SmoothStreamingSegmenter
         /// </summary>
         /// <param name="publishUri">Publish URI</param>
-        public SmoothStreamingSegmenter(string publishUri)
+        public SmoothStreamingSegmenter(string publishUri, bool unitTest = false)
         {
             this.mediaDataPtrSize = Global.MediaAllocator.BufferSize;
             this.mediaDataPtr = Marshal.AllocHGlobal(this.mediaDataPtrSize);
             this.publishUri = publishUri;
-            this.publisher = SmoothStreamingPublisher.Create(this.publishUri);
+            this.publisher = SmoothStreamingPublisher.Create(this.publishUri, unitTest);
         }
 
         #endregion

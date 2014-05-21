@@ -25,7 +25,7 @@
 
         /// <summary>
         /// Gets or set tag type (i.e. RTMP message type).
-        /// For FLV must be Audio and Video only
+        /// For FLV must be Data, Audio and Video only
         /// </summary>
         public RtmpMessageType TagType { get; set; }
 

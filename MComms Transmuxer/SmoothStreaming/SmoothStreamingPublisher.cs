@@ -98,15 +98,18 @@
         /// Creates new instance of SmoothStreamingPublisher
         /// </summary>
         /// <param name="publishUri">Publish URI</param>
-        private SmoothStreamingPublisher(string publishUri)
+        private SmoothStreamingPublisher(string publishUri, bool unitTest = false)
         {
             this.publishUri = publishUri;
             this.muxId = SmoothStreamingSegmenter.MCSSF_Initialize();
-            // always restart publishing point if we have new publisher instance,
-            // i.e. it is either new publishing point or continuation from another server
-            // which can't be continued smoothly
-            this.ShutdownPublishingPoint();
-            this.StartPublishingPoint();
+            if (!unitTest)
+            {
+                // always restart publishing point if we have new publisher instance,
+                // i.e. it is either new publishing point or continuation from another server
+                // which can't be continued smoothly
+                this.ShutdownPublishingPoint();
+                this.StartPublishingPoint();
+            }
         }
 
         #endregion
@@ -166,7 +169,7 @@
         /// </summary>
         /// <param name="publishUri">Publish URI</param>
         /// <returns>Created/found publisher</returns>
-        public static SmoothStreamingPublisher Create(string publishUri)
+        public static SmoothStreamingPublisher Create(string publishUri, bool unitTest = false)
         {
             lock (SmoothStreamingPublisher.publishers)
             {
@@ -176,7 +179,7 @@
                 }
                 else
                 {
-                    SmoothStreamingPublisher publisher = new SmoothStreamingPublisher(publishUri);
+                    SmoothStreamingPublisher publisher = new SmoothStreamingPublisher(publishUri, unitTest);
                     SmoothStreamingPublisher.publishers.Add(publishUri, publisher);
                     return publisher;
                 }

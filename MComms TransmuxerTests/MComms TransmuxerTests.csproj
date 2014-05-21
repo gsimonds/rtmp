@@ -19,10 +19,11 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>..\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <PlatformTarget>x86</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -33,14 +34,17 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="log4net, Version=1.2.13.0, Culture=neutral, PublicKeyToken=669e0ddf0bb1aa2a, processorArchitecture=MSIL" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="Microsoft.VisualStudio.QualityTools.UnitTestFramework, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL" />
     <Reference Include="System" />
+    <Reference Include="System.Configuration.Install" />
     <Reference Include="System.Core">
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
     <Reference Include="System.Data" />
     <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Management" />
     <Reference Include="System.ServiceProcess" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
@@ -52,17 +56,31 @@
     </CodeAnalysisDependentAssemblyPaths>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ProgramTest.cs" />
+    <Compile Include="EndianBinaryWriterAmfExtensionTest.cs" />
+    <Compile Include="FlvFileHeaderTest.cs" />
+    <Compile Include="FlvTagHeaderTest.cs" />
+    <Compile Include="MediaTypeTest.cs" />
+    <Compile Include="PacketBufferAllocatorTest.cs" />
+    <Compile Include="PacketBufferStreamTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RtmpChunkHeaderTest.cs" />
     <Compile Include="RtmpChunkStreamTest.cs" />
     <Compile Include="RtmpHandshakeTest.cs" />
+    <Compile Include="RtmpMessageAbortTest.cs" />
+    <Compile Include="RtmpMessageAckTest.cs" />
+    <Compile Include="RtmpMessageCommandTest.cs" />
+    <Compile Include="RtmpMessageMetadataTest.cs" />
+    <Compile Include="RtmpMessageSetChunkSizeTest.cs" />
+    <Compile Include="RtmpMessageSetPeerBandwidthTest.cs" />
+    <Compile Include="RtmpMessageStreamTest.cs" />
     <Compile Include="RtmpMessageTest.cs" />
+    <Compile Include="RtmpMessageUserControlTest.cs" />
+    <Compile Include="RtmpMessageWindowAckSizeTest.cs" />
     <Compile Include="RtmpProtocolParserTest.cs" />
-    <Compile Include="RtmpServerTest.cs" />
     <Compile Include="RtmpSessionTest.cs" />
-    <Compile Include="SocketTransportTest.cs" />
-    <Compile Include="TransmuxerServiceTest.cs" />
+    <Compile Include="SmoothStreamingPublisherTest.cs" />
+    <Compile Include="SmoothStreamingSegmenterTest.cs" />
+    <Compile Include="SortedListExtensionTest.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MComms Transmuxer\MComms Transmuxer.csproj">

@@ -1,21 +1,19 @@
-﻿using MComms_Transmuxer.RTMP;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
-using MComms_Transmuxer.Transport;
-using System.Net;
 using MComms_Transmuxer;
 using MComms_Transmuxer.Common;
+using MComms_Transmuxer.RTMP;
 
 namespace MComms_TransmuxerTests
 {
     
     
     /// <summary>
-    ///This is a test class for RtmpSessionTest and is intended
-    ///to contain all RtmpSessionTest Unit Tests
+    ///This is a test class for FlvTagHeaderTest and is intended
+    ///to contain all FlvTagHeaderTest Unit Tests
     ///</summary>
     [TestClass()]
-    public class RtmpSessionTest
+    public class FlvTagHeaderTest
     {
 
 
@@ -69,35 +67,24 @@ namespace MComms_TransmuxerTests
 
 
         /// <summary>
-        /// A test for Dispose, it includes also tests for OnReceive and ReleaseMessageStreams
+        ///A test for ToPacketBuffer
         ///</summary>
         [TestMethod()]
-        public void DisposeTest()
+        public void ToPacketBufferTest()
         {
-            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, 10);
-            long sessionId = 1;
-            SocketTransport transport = new SocketTransport();
-            transport.Start();
-            IPEndPoint sessionEndPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9999);
-            RtmpSession_Accessor target = new RtmpSession_Accessor(sessionId, transport, sessionEndPoint);
-
-            target.messageStreams.Add(1, new RtmpMessageStream(1));
-
-            byte[] buf = new byte[Global.TransportBufferSize];
-            for (int i = 0; i < 10; ++i)
+            FlvTagHeader target = new FlvTagHeader();
+            target.TagType = RtmpMessageType.Audio;
+            target.DataSize = 1024;
+            target.Timestamp = 2000;
+            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, 1);
+            PacketBuffer actual = target.ToPacketBuffer();
+            byte[] actualBuffer = new byte[actual.ActualBufferSize];
+            Array.Copy(actual.Buffer, actualBuffer, actual.ActualBufferSize);
+            byte[] correctBuffer = new byte[]
             {
-                target.OnReceive(null, new TransportArgs(null, buf, 0, buf.Length));
-            }
-
-            Assert.IsTrue(target.receivedPackets.Count > 0);
-
-            target.Dispose();
-            Assert.IsNull(target.sessionThread);
-            Assert.AreEqual(0, target.messageStreams.Count);
-            Assert.AreEqual(0, target.receivedPackets.Count);
-            Assert.IsNull(target.lastReceivedPacket);
-
-            transport.Stop();
+                0x08,0x00,0x04,0x00,0x00,0x07,0xd0,0x00,0x00,0x00,0x00,
+            };
+            CollectionAssert.AreEqual(correctBuffer, actualBuffer);
         }
     }
 }

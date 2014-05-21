@@ -755,7 +755,7 @@
                 try
                 {
                     Regex rg = new Regex(@"^(?<hms>[0-9]{2}:[0-9]{2}:[0-9]{2}):\s*(?<frame>[0-9]{1,3})$");
-                    Match m = rg.Match(timestampData.Strings["st"]);
+                    Match m = rg.Match(timestampData.Strings["tc"]);
 
                     if (m.Success && m.Groups["hms"].Success && m.Groups["frame"].Success)
                     {
