@@ -40,11 +40,13 @@ namespace MComms_TransmuxerTests
         //You can use the following additional attributes as you write your tests:
         //
         //Use ClassInitialize to run code before running the first test in the class
-        //[ClassInitialize()]
-        //public static void MyClassInitialize(TestContext testContext)
-        //{
-        //}
-        //
+        [ClassInitialize()]
+        public static void MyClassInitialize(TestContext testContext)
+        {
+            // initialize global allocator for all tests
+            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, 100);
+        }
+        
         //Use ClassCleanup to run code after all tests in a class have run
         //[ClassCleanup()]
         //public static void MyClassCleanup()
@@ -74,7 +76,6 @@ namespace MComms_TransmuxerTests
         public void DisposeTest()
         {
             PacketBufferStream_Accessor target = new PacketBufferStream_Accessor();
-            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, 1);
             PacketBuffer packet = Global.Allocator.LockBuffer();
             packet.ActualBufferSize = 10;
             target.Append(packet, 0, packet.ActualBufferSize);
@@ -120,7 +121,6 @@ namespace MComms_TransmuxerTests
         public void LengthTest()
         {
             PacketBufferStream_Accessor target = new PacketBufferStream_Accessor();
-            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, 1);
             PacketBuffer packet = Global.Allocator.LockBuffer();
             packet.ActualBufferSize = 10;
             target.Append(packet, 0, packet.ActualBufferSize);
@@ -134,7 +134,6 @@ namespace MComms_TransmuxerTests
         public void SeekTest()
         {
             PacketBufferStream_Accessor target = new PacketBufferStream_Accessor();
-            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, 1);
             PacketBuffer packet = Global.Allocator.LockBuffer();
             packet.ActualBufferSize = 10;
             target.Append(packet, 0, packet.ActualBufferSize);
@@ -153,7 +152,6 @@ namespace MComms_TransmuxerTests
         public void ReadByteTest()
         {
             PacketBufferStream_Accessor target = new PacketBufferStream_Accessor();
-            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, 1);
             PacketBuffer packet = Global.Allocator.LockBuffer();
             packet.ActualBufferSize = 10;
             byte expected = 0x55;
@@ -171,7 +169,6 @@ namespace MComms_TransmuxerTests
         public void ReadTest()
         {
             PacketBufferStream_Accessor target = new PacketBufferStream_Accessor();
-            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, 1);
             PacketBuffer packet = Global.Allocator.LockBuffer();
             byte[] correctBuffer = new byte[]
             {
@@ -193,7 +190,6 @@ namespace MComms_TransmuxerTests
         public void WriteTest()
         {
             PacketBufferStream_Accessor target = new PacketBufferStream_Accessor();
-            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, 1);
             PacketBuffer packet = Global.Allocator.LockBuffer();
             byte[] correctBuffer = new byte[]
             {
@@ -214,7 +210,6 @@ namespace MComms_TransmuxerTests
         public void FirstPacketBufferTest()
         {
             PacketBufferStream_Accessor target = new PacketBufferStream_Accessor();
-            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, 2);
             PacketBuffer packet1 = Global.Allocator.LockBuffer();
             packet1.ActualBufferSize = 10;
             target.Append(packet1, 0, packet1.ActualBufferSize);
@@ -232,7 +227,6 @@ namespace MComms_TransmuxerTests
         public void AppendTest()
         {
             PacketBufferStream_Accessor target = new PacketBufferStream_Accessor();
-            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, 1);
             PacketBuffer packet = Global.Allocator.LockBuffer();
             packet.ActualBufferSize = 10;
             target.Append(packet, 0, packet.ActualBufferSize);
@@ -249,7 +243,6 @@ namespace MComms_TransmuxerTests
         [TestMethod()]
         public void CopyToTest()
         {
-            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, 2);
             PacketBufferStream_Accessor target = new PacketBufferStream_Accessor();
             PacketBuffer packet1 = Global.Allocator.LockBuffer();
             byte[] correctBuffer = new byte[]
@@ -277,7 +270,6 @@ namespace MComms_TransmuxerTests
         public void TrimBeginTest()
         {
             PacketBufferStream_Accessor target = new PacketBufferStream_Accessor();
-            Global.Allocator = new PacketBufferAllocator(Global.TransportBufferSize, 2);
             PacketBuffer packet1 = Global.Allocator.LockBuffer();
             packet1.ActualBufferSize = 10;
             target.Append(packet1, 0, packet1.ActualBufferSize);

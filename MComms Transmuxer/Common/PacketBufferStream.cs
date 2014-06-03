@@ -437,8 +437,8 @@
                 }
                 else
                 {
-                    IDictionaryEnumerator denum = this.bufferId2BufferEntry.GetEnumerator();
-                    return denum.MoveNext() ? ((BufferEntry)(((DictionaryEntry)denum.Current).Value)).Buffer : null;
+                    long bufferId = (int)this.position2BufferId[0];
+                    return ((BufferEntry)this.bufferId2BufferEntry[bufferId]).Buffer;
                 }
             }
         }

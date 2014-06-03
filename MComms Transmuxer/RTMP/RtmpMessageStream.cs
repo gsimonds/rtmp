@@ -427,7 +427,7 @@
                     throw new CriticalStreamException(string.Format("Command {0}, no audio private data found", msg.MessageType));
                 }
 
-                if (privateDataLen < 3)
+                if (privateDataLen < 2)
                 {
                     throw new CriticalStreamException(string.Format("Command {0}, wrong audio private data format", msg.MessageType));
                 }
