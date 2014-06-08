@@ -7,7 +7,7 @@
 
   <?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
 
-  <?define ExeFolder = "$(var.SolutionDir)\Release\" ?>
+  <?define ExeFolder = "$(var.MComms Transmuxer.TargetDir)" ?>
   <?define Log4NetFolder = "$(var.SolutionDir)\3rdParty\Log4Net\" ?>
 
   <?define MMVC10CRT = "Microsoft_VC100_CRT_x86" ?>
@@ -16,7 +16,7 @@
   
   <Product Id="*" Name="$(var.ProductName)" Language="1033" Version="$(var.ProductVersion)" Manufacturer="$(var.CompanyName)" UpgradeCode="2b4cddb9-911c-42d7-9e6d-18da21d7734a">
     
-    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+    <Package InstallerVersion="300" Compressed="yes" InstallScope="perMachine" />
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     <MediaTemplate EmbedCab="yes" />
