@@ -15,7 +15,7 @@
       <Value Profile="(Default)">andy</Value>
     </Setting>
     <Setting Name="IisMediaRestApiUserPwd" Type="System.String" Scope="User">
-      <Value Profile="(Default)" />
+      <Value Profile="(Default)">winonA03</Value>
     </Setting>
     <Setting Name="PublishNamePattern" Type="System.String" Scope="User">
       <Value Profile="(Default)">(?&lt;modifier&gt;\d+)$</Value>

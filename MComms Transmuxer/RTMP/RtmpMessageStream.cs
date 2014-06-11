@@ -399,9 +399,21 @@
                 }
 
                 this.audioMediaType.Codec = MediaCodec.AAC;
-                this.audioMediaType.SampleRate = msg.SampleRate;
-                this.audioMediaType.Channels = msg.Channels;
-                this.audioMediaType.SampleSize = msg.SampleSize;
+
+                if (this.audioMediaType.SampleRate == 0)
+                {
+                    this.audioMediaType.SampleRate = msg.SampleRate;
+                }
+
+                if (this.audioMediaType.Channels == 0)
+                {
+                    this.audioMediaType.Channels = msg.Channels;
+                }
+
+                if (this.audioMediaType.SampleSize == 0)
+                {
+                    this.audioMediaType.SampleSize = msg.SampleSize;
+                }
 
                 // first received frame contains codec private data
 #if DEBUG
