@@ -70,7 +70,7 @@ namespace MComms_Transmuxer.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("winonA03")]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
         public string IisMediaRestApiUserPwd {
             get {
                 return ((string)(this["IisMediaRestApiUserPwd"]));
