@@ -100,5 +100,36 @@
             }
             return true;
         }
+
+        public override bool Equals(object obj)
+        {
+            MediaType right = (MediaType)obj;
+
+            switch (this.ContentType)
+            {
+                case MediaContentType.Audio:
+                    return
+                        this.ContentType == right.ContentType &&
+                        this.Codec == right.Codec &&
+                        this.Bitrate == right.Bitrate &&
+                        this.IsPrivateDataEqual(right.PrivateData) &&
+                        this.SampleRate == right.SampleRate &&
+                        this.Channels == right.Channels &&
+                        this.SampleSize == right.SampleSize;
+
+                case MediaContentType.Video:
+                    return
+                        this.ContentType == right.ContentType &&
+                        this.Codec == right.Codec &&
+                        this.Bitrate == right.Bitrate &&
+                        this.IsPrivateDataEqual(right.PrivateData) &&
+                        this.Width == right.Width &&
+                        this.Height == right.Height &&
+                        this.Framerate.Num == right.Framerate.Num &&
+                        this.Framerate.Den == right.Framerate.Den;
+            }
+
+            return this.ContentType == right.ContentType && this.Codec == right.Codec;
+        }
     }
 }

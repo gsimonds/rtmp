@@ -138,19 +138,7 @@
         {
             lock (this)
             {
-                foreach (Stream webRequestStream in this.webRequestStreams.Values)
-                {
-                    try
-                    {
-                        webRequestStream.Dispose();
-                    }
-                    catch
-                    {
-                    }
-                }
-
-                this.webRequestStreams.Clear();
-                this.webRequests.Clear();
+                this.disposeWebRequests();
 
                 if (this.muxId >= 0)
                 {
@@ -175,7 +163,9 @@
             {
                 if (SmoothStreamingPublisher.publishers.ContainsKey(publishUri))
                 {
-                    return SmoothStreamingPublisher.publishers[publishUri];
+                    SmoothStreamingPublisher publisher = SmoothStreamingPublisher.publishers[publishUri];
+                    publisher.lastActivity = DateTime.Now;
+                    return publisher;
                 }
                 else
                 {
@@ -199,12 +189,17 @@
                     interrupted = false;
                     foreach (KeyValuePair<string, SmoothStreamingPublisher> pair in SmoothStreamingPublisher.publishers)
                     {
-                        if ((DateTime.Now - pair.Value.lastActivity).TotalMilliseconds < 60000)
+                        lock (pair.Value)
                         {
-                            continue;
+                            if ((DateTime.Now - pair.Value.lastActivity).TotalMilliseconds < 60000)
+                            {
+                                continue;
+                            }
+
+                            Global.Log.DebugFormat("Disposing expired publisher {0}", pair.Value.PublishUri);
+                            pair.Value.Dispose();
                         }
 
-                        pair.Value.Dispose();
                         SmoothStreamingPublisher.publishers.Remove(pair.Key);
                         interrupted = true;
                         break; // because collection is modified
@@ -285,6 +280,7 @@
                         this.lastPacketAbsoluteTime = DateTime.MinValue;
                         this.lastPacketTimestamp = long.MinValue;
                         this.publishStreamId2MuxerStreamId.Clear();
+                        this.disposeWebRequests();
 
                         if (this.muxId >= 0)
                         {
@@ -407,8 +403,6 @@
         /// <param name="length">Data length</param>
         public void PushData(Guid streamId, DateTime absoluteTime, long timestamp, byte[] buffer, int offset, int length)
         {
-            this.lastActivity = DateTime.Now;
-
             // 3 retries
             for (int i = 0; i < 3; ++i)
             {
@@ -416,6 +410,7 @@
 
                 lock (this)
                 {
+                    this.lastActivity = DateTime.Now;
                     this.publishStreamId2LastActivity[streamId] = DateTime.Now;
                     this.UnregisterExpiredStreams();
 
@@ -497,6 +492,7 @@
                     this.mediaDataStarted = false;
                     this.lastPacketAbsoluteTime = DateTime.MinValue;
                     this.lastPacketTimestamp = long.MinValue;
+                    this.disposeWebRequests();
                     this.ShutdownPublishingPoint();
                     this.StartPublishingPoint();
                 }
@@ -1036,6 +1032,23 @@
             Stream webRequestStream = this.webRequestStreams[streamId];
             webRequestStream.Write(buffer, offset, length);
             webRequestStream.Flush();
+        }
+
+        private void disposeWebRequests()
+        {
+            foreach (Stream webRequestStream in this.webRequestStreams.Values)
+            {
+                try
+                {
+                    webRequestStream.Dispose();
+                }
+                catch
+                {
+                }
+            }
+
+            this.webRequestStreams.Clear();
+            this.webRequests.Clear();
         }
 
         #endregion

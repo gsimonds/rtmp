@@ -162,7 +162,7 @@ namespace MComms_TransmuxerTests
             Guid streamId = target.RegisterMediaType(mediaType);
 
             MediaType actual = target.GetMediaType(streamId);
-            Assert.AreEqual(mediaType, actual);
+            Assert.IsTrue(mediaType.Equals(actual));
         }
 
         /// <summary>
